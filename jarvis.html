@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. — Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-void: #050a0f;
+    --bg-panel: #0b141c;
+    --bg-panel-2: #0e1c26;
+    --cyan: #4de8f0;
+    --cyan-dim: #1c5a63;
+    --cyan-glow: rgba(77,232,240,0.55);
+    --amber: #ff8a3d;
+    --text-hi: #eaf6f8;
+    --text-lo: #6f95a0;
+    --line: rgba(77,232,240,0.18);
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: radial-gradient(ellipse at 50% 30%, #0a1620 0%, var(--bg-void) 60%, #020407 100%);
+    color: var(--text-hi);
+    font-family: 'Rajdhani', sans-serif;
+    overflow-x:hidden;
+  }
+
+  /* ambient scanlines + grid */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 42px 42px;
+    opacity:0.35;
+    pointer-events:none;
+    mask-image: radial-gradient(ellipse at 50% 40%, black 0%, transparent 72%);
+    z-index:0;
+  }
+  body::after{
+    content:"";
+    position:fixed; inset:0;
+    background: repeating-linear-gradient(
+      to bottom, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px
+    );
+    pointer-events:none;
+    z-index:2;
+    opacity:0.5;
+  }
+
+  .frame{
+    position:relative;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    z-index:1;
+  }
+
+  /* corner brackets, targeting-reticle style */
+  .corner{
+    position:fixed; width:34px; height:34px; z-index:3;
+    border-color: var(--cyan); opacity:0.7;
+  }
+  .corner.tl{ top:18px; left:18px; border-top:2px solid; border-left:2px solid; }
+  .corner.tr{ top:18px; right:18px; border-top:2px solid; border-right:2px solid; }
+  .corner.bl{ bottom:18px; left:18px; border-bottom:2px solid; border-left:2px solid; }
+  .corner.br{ bottom:18px; right:18px; border-bottom:2px solid; border-right:2px solid; }
+
+  header{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding: 30px 48px 0 48px;
+  }
+
+  .brand{
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .brand .eyebrow{
+    font-family:'Orbitron', sans-serif;
+    font-size:11px; letter-spacing:5px; color:var(--cyan);
+    opacity:0.85;
+  }
+  .brand h1{
+    font-family:'Orbitron', sans-serif;
+    font-weight:900;
+    font-size:clamp(28px,4vw,44px);
+    margin:2px 0 0 0;
+    letter-spacing:4px;
+    color:var(--text-hi);
+    text-shadow: 0 0 18px var(--cyan-glow);
+  }
+  .brand h1 span{ color:var(--cyan); }
+
+  .statusblock{
+    text-align:right;
+    font-size:13px;
+    color:var(--text-lo);
+    letter-spacing:1px;
+    line-height:1.7;
+  }
+  .statusblock .dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--cyan); box-shadow:0 0 8px var(--cyan-glow);
+    margin-right:6px;
+    animation: blink 2.4s ease-in-out infinite;
+  }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  main{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:34px;
+    padding: 30px 24px 60px 24px;
+  }
+
+  /* core reactor */
+  .core-wrap{
+    position:relative;
+    width:min(58vw, 420px);
+    aspect-ratio:1/1;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .ring{
+    position:absolute;
+    border-radius:50%;
+    border:1px solid var(--cyan-dim);
+  }
+  .ring.r1{ inset:0; animation: spin 26s linear infinite; border-style:dashed; opacity:0.55;}
+  .ring.r2{ inset:9%; animation: spin 18s linear infinite reverse; opacity:0.75;}
+  .ring.r3{ inset:19%; border:1px solid var(--cyan); opacity:0.9; box-shadow:0 0 24px var(--cyan-glow) inset;}
+  @keyframes spin{ to{ transform:rotate(360deg);} }
+
+  .ring.r2::before, .ring.r1::before{
+    content:""; position:absolute; width:6px; height:6px; border-radius:50%;
+    background:var(--cyan); box-shadow:0 0 10px 3px var(--cyan-glow);
+    top:-3px; left:50%;
+  }
+
+  .core-center{
+    position:absolute; inset:29%;
+    border-radius:50%;
+    background: radial-gradient(circle at 50% 45%, #cfffff 0%, var(--cyan) 28%, #0c3a40 72%, transparent 100%);
+    box-shadow: 0 0 60px 14px var(--cyan-glow), 0 0 140px 40px rgba(77,232,240,0.18);
+    animation: pulse 3.4s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ transform:scale(1); filter:brightness(1); }
+    50%{ transform:scale(1.045); filter:brightness(1.18); }
+  }
+
+  .core-label{
+    position:absolute; bottom:-46px; left:50%; transform:translateX(-50%);
+    font-family:'Orbitron', sans-serif;
+    font-size:12px; letter-spacing:6px; color:var(--cyan);
+    white-space:nowrap;
+  }
+
+  /* console panel holding the ElevenLabs widget */
+  .console{
+    width:min(92vw, 560px);
+    background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px 22px 26px 22px;
+    position:relative;
+    box-shadow: 0 0 0 1px rgba(77,232,240,0.05), 0 20px 60px -20px rgba(0,0,0,0.7);
+  }
+  .console::before{
+    content:"VOICE LINK"; position:absolute; top:-11px; left:20px;
+    background:var(--bg-void); padding:0 8px;
+    font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:4px;
+    color:var(--amber);
+  }
+
+  .console-row{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:12px; color:var(--text-lo); letter-spacing:1px;
+    margin-bottom:16px;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--line);
+  }
+  .console-row b{ color:var(--text-hi); font-weight:600; }
+
+  .widget-host{
+    display:flex; align-items:center; justify-content:center;
+    min-height:90px;
+  }
+
+  footer{
+    text-align:center;
+    padding-bottom:22px;
+    font-size:11px;
+    letter-spacing:3px;
+    color:var(--text-lo);
+    opacity:0.6;
+  }
+
+  @media (max-width: 640px){
+    header{ padding:22px 20px 0 20px; flex-direction:column; gap:14px; }
+    .statusblock{ text-align:left; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div class="frame">
+    <header>
+      <div class="brand">
+        <div class="eyebrow">SISTEMA DE ASSISTÊNCIA PESSOAL</div>
+        <h1>J.<span>A.R.V.I.S.</span></h1>
+      </div>
+      <div class="statusblock">
+        <div><span class="dot"></span>STATUS: ONLINE</div>
+        <div id="clock">--:--:--</div>
+        <div>OPERADOR: RENATO</div>
+      </div>
+    </header>
+
+    <main>
+      <div class="core-wrap">
+        <div class="ring r1"></div>
+        <div class="ring r2"></div>
+        <div class="ring r3"></div>
+        <div class="core-center"></div>
+        <div class="core-label">NÚCLEO ATIVO</div>
+      </div>
+
+      <div class="console">
+        <div class="console-row">
+          <span>CANAL <b>ELEVENLABS · CONVERSATIONAL AI</b></span>
+          <span><span class="dot"></span>PRONTO</span>
+        </div>
+        <div class="widget-host">
+          <elevenlabs-convai agent-id="agent_6501ksgr3r2tfycsnwcg3c4yab30"></elevenlabs-convai>
+          <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+        </div>
+      </div>
+    </main>
+
+    <footer>STARK-CLASS INTERFACE · BUILD LOCAL</footer>
+  </div>
+
+<script>
+  function tick(){
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString('pt-BR', {hour12:false});
+  }
+  tick();
+  setInterval(tick, 1000);
+</script>
+
+</body>
+</html>
