@@ -1,0 +1,3 @@
+# Arquivos locais com segredos — nunca vão para o GitHub
+*.local.*
+.claude/settings.local.json

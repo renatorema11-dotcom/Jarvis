@@ -16,16 +16,28 @@
     --cyan-dim: #1c5a63;
     --cyan-glow: rgba(77,232,240,0.55);
     --amber: #ff8a3d;
+    --amber-glow: rgba(255,138,61,0.55);
+    --violet: #b28cff;
+    --violet-glow: rgba(178,140,255,0.55);
+    --green: #5dfca0;
+    --red: #ff5d6c;
     --text-hi: #eaf6f8;
     --text-lo: #6f95a0;
     --line: rgba(77,232,240,0.18);
+
+    /* cor viva do núcleo: muda com o estado da conversa */
+    --core: var(--cyan);
+    --core-glow: var(--cyan-glow);
+    --nivel: 0;
   }
 
   *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
 
   html,body{
-    margin:0; padding:0; height:100%;
+    margin:0; padding:0; min-height:100%;
     background: radial-gradient(ellipse at 50% 30%, #0a1620 0%, var(--bg-void) 60%, #020407 100%);
+    background-color: var(--bg-void);
     color: var(--text-hi);
     font-family: 'Rajdhani', sans-serif;
     overflow-x:hidden;
@@ -56,6 +68,10 @@
     opacity:0.5;
   }
 
+  body[data-estado="falando"]{ --core: var(--amber); --core-glow: var(--amber-glow); }
+  body[data-estado="ferramenta"]{ --core: var(--violet); --core-glow: var(--violet-glow); }
+  body[data-estado="offline"]{ --core: var(--cyan-dim); --core-glow: rgba(77,232,240,0.18); }
+
   .frame{
     position:relative;
     min-height:100vh;
@@ -67,7 +83,7 @@
   /* corner brackets, targeting-reticle style */
   .corner{
     position:fixed; width:34px; height:34px; z-index:3;
-    border-color: var(--cyan); opacity:0.7;
+    border-color: var(--cyan); opacity:0.7; pointer-events:none;
   }
   .corner.tl{ top:18px; left:18px; border-top:2px solid; border-left:2px solid; }
   .corner.tr{ top:18px; right:18px; border-top:2px solid; border-right:2px solid; }
@@ -75,13 +91,11 @@
   .corner.br{ bottom:18px; right:18px; border-bottom:2px solid; border-right:2px solid; }
 
   header{
-    display:flex; justify-content:space-between; align-items:flex-start;
+    display:flex; justify-content:space-between; align-items:flex-start; gap:24px;
     padding: 30px 48px 0 48px;
   }
 
-  .brand{
-    display:flex; flex-direction:column; gap:4px;
-  }
+  .brand{ display:flex; flex-direction:column; gap:4px; }
   .brand .eyebrow{
     font-family:'Orbitron', sans-serif;
     font-size:11px; letter-spacing:5px; color:var(--cyan);
@@ -98,104 +112,239 @@
   }
   .brand h1 span{ color:var(--cyan); }
 
+  .header-dir{ display:flex; align-items:flex-start; gap:18px; }
+
   .statusblock{
     text-align:right;
+    white-space:nowrap;
     font-size:13px;
     color:var(--text-lo);
     letter-spacing:1px;
     line-height:1.7;
   }
-  .statusblock .dot{
+  .statusblock b{ color:var(--text-hi); font-weight:600; }
+  .dot{
     display:inline-block; width:7px; height:7px; border-radius:50%;
     background:var(--cyan); box-shadow:0 0 8px var(--cyan-glow);
-    margin-right:6px;
+    margin-right:6px; vertical-align:1px;
     animation: blink 2.4s ease-in-out infinite;
   }
+  .dot.off{ background:var(--red); box-shadow:0 0 8px rgba(255,93,108,0.6); }
+  .dot.wait{ background:var(--amber); box-shadow:0 0 8px var(--amber-glow); }
   @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  .icon-btn{
+    width:40px; height:40px; border-radius:10px;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:transparent; color:var(--cyan);
+    border:1px solid var(--line); cursor:pointer;
+    transition: background .2s, border-color .2s, box-shadow .2s;
+  }
+  .icon-btn:hover{ background:rgba(77,232,240,0.08); border-color:var(--cyan-dim); }
+  .icon-btn:focus-visible, button:focus-visible, input:focus-visible{
+    outline:2px solid var(--cyan); outline-offset:2px;
+  }
+  .icon-btn svg{ width:20px; height:20px; }
+  .icon-btn[aria-pressed="true"]{ background:rgba(77,232,240,0.14); border-color:var(--cyan); box-shadow:0 0 14px var(--cyan-glow) inset; }
+  .icon-btn.alerta[aria-pressed="true"]{ color:var(--red); border-color:var(--red); background:rgba(255,93,108,0.1); box-shadow:none; }
 
   main{
     flex:1;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    gap:34px;
-    padding: 30px 24px 60px 24px;
+    display:grid;
+    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(280px, 340px);
+    gap:24px;
+    padding: 28px 48px 40px 48px;
+    align-items:start;
   }
+  .col{ display:flex; flex-direction:column; gap:18px; min-width:0; }
+  .col-centro{ align-items:center; gap:22px; }
 
-  /* core reactor */
+  /* ---------- painéis ---------- */
+  .painel{
+    width:100%;
+    background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px 18px 16px 18px;
+    position:relative;
+    box-shadow: 0 0 0 1px rgba(77,232,240,0.05), 0 20px 60px -20px rgba(0,0,0,0.7);
+  }
+  .painel h2{
+    position:absolute; top:-10px; left:16px; margin:0;
+    background:var(--bg-void); padding:0 8px;
+    font-family:'Orbitron', sans-serif; font-size:10px; font-weight:700; letter-spacing:4px;
+    color:var(--amber);
+  }
+  .painel h2 .contador{ color:var(--text-lo); letter-spacing:2px; margin-left:6px; }
+  .vazio{ color:var(--text-lo); font-size:14px; margin:4px 0 0 0; }
+
+  .lista{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .lista li{
+    display:flex; gap:10px; align-items:baseline;
+    font-size:15px; line-height:1.35;
+    padding-bottom:8px; border-bottom:1px solid rgba(77,232,240,0.08);
+  }
+  .lista li:last-child{ border-bottom:none; padding-bottom:0; }
+  .lista .hora{
+    font-family:'Orbitron', sans-serif; font-size:11px; letter-spacing:1px;
+    color:var(--cyan); min-width:44px; flex-shrink:0;
+  }
+  .lista .texto{ flex:1; min-width:0; overflow-wrap:anywhere; }
+  .lista .sub{ display:block; color:var(--text-lo); font-size:13px; }
+
+  .chip{
+    flex-shrink:0;
+    font-size:10px; letter-spacing:1.5px; text-transform:uppercase;
+    padding:2px 7px; border-radius:20px;
+    border:1px solid var(--cyan-dim); color:var(--cyan);
+  }
+  .chip.alta, .chip.atrasada{ border-color:var(--red); color:var(--red); }
+  .chip.hoje{ border-color:var(--amber); color:var(--amber); }
+
+  .perfil-texto{ white-space:pre-wrap; font-size:15px; line-height:1.45; margin:0; color:var(--text-hi); }
+
+  .rolagem{ max-height:280px; overflow-y:auto; padding-right:4px; }
+  .rolagem::-webkit-scrollbar{ width:6px; }
+  .rolagem::-webkit-scrollbar-thumb{ background:var(--cyan-dim); border-radius:6px; }
+
+  /* ---------- núcleo ---------- */
   .core-wrap{
     position:relative;
-    width:min(58vw, 420px);
+    width:min(70vw, 400px);
     aspect-ratio:1/1;
     display:flex; align-items:center; justify-content:center;
+    margin-top:6px;
   }
+  .core-wrap canvas{ position:absolute; inset:-6%; width:112%; height:112%; pointer-events:none; }
 
   .ring{
     position:absolute;
     border-radius:50%;
     border:1px solid var(--cyan-dim);
+    transition: border-color .4s;
   }
   .ring.r1{ inset:0; animation: spin 26s linear infinite; border-style:dashed; opacity:0.55;}
   .ring.r2{ inset:9%; animation: spin 18s linear infinite reverse; opacity:0.75;}
-  .ring.r3{ inset:19%; border:1px solid var(--cyan); opacity:0.9; box-shadow:0 0 24px var(--cyan-glow) inset;}
+  .ring.r3{
+    inset:19%; border:1px solid var(--core); opacity:0.9;
+    box-shadow:0 0 24px var(--core-glow) inset;
+    transition: border-color .4s, box-shadow .4s;
+  }
   @keyframes spin{ to{ transform:rotate(360deg);} }
+  body[data-estado="ferramenta"] .ring.r1{ animation-duration:4s; }
+  body[data-estado="ferramenta"] .ring.r2{ animation-duration:3s; }
+  body[data-estado="conectando"] .ring.r2{ animation-duration:2.4s; }
 
   .ring.r2::before, .ring.r1::before{
     content:""; position:absolute; width:6px; height:6px; border-radius:50%;
-    background:var(--cyan); box-shadow:0 0 10px 3px var(--cyan-glow);
+    background:var(--core); box-shadow:0 0 10px 3px var(--core-glow);
     top:-3px; left:50%;
   }
 
   .core-center{
     position:absolute; inset:29%;
     border-radius:50%;
-    background: radial-gradient(circle at 50% 45%, #cfffff 0%, var(--cyan) 28%, #0c3a40 72%, transparent 100%);
-    box-shadow: 0 0 60px 14px var(--cyan-glow), 0 0 140px 40px rgba(77,232,240,0.18);
-    animation: pulse 3.4s ease-in-out infinite;
+    background: radial-gradient(circle at 50% 45%, #fff6ec 0%, var(--core) 28%, #0c3a40 72%, transparent 100%);
+    box-shadow: 0 0 calc(60px + var(--nivel) * 70px) calc(14px + var(--nivel) * 22px) var(--core-glow), 0 0 140px 40px rgba(77,232,240,0.12);
+    transform: scale(calc(1 + var(--nivel) * 0.12));
+    transition: background .4s;
   }
+  body[data-estado="offline"] .core-center{ animation: pulse 3.4s ease-in-out infinite; filter:saturate(0.6) brightness(0.8); }
+  body[data-estado="conectando"] .core-center{ animation: pulse 1.1s ease-in-out infinite; }
   @keyframes pulse{
     0%,100%{ transform:scale(1); filter:brightness(1); }
     50%{ transform:scale(1.045); filter:brightness(1.18); }
   }
 
   .core-label{
-    position:absolute; bottom:-46px; left:50%; transform:translateX(-50%);
+    position:absolute; bottom:-40px; left:50%; transform:translateX(-50%);
     font-family:'Orbitron', sans-serif;
-    font-size:12px; letter-spacing:6px; color:var(--cyan);
+    font-size:12px; letter-spacing:6px; color:var(--core);
     white-space:nowrap;
+    transition: color .4s;
   }
 
-  /* console panel holding the ElevenLabs widget */
-  .console{
-    width:min(92vw, 560px);
-    background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
-    border:1px solid var(--line);
-    border-radius:14px;
-    padding:22px 22px 26px 22px;
-    position:relative;
-    box-shadow: 0 0 0 1px rgba(77,232,240,0.05), 0 20px 60px -20px rgba(0,0,0,0.7);
+  .controles{ display:flex; align-items:center; gap:18px; margin-top:30px; }
+  .btn-ligar{
+    font-family:'Orbitron', sans-serif; font-weight:700; font-size:13px; letter-spacing:4px;
+    color:var(--bg-void); background:var(--cyan);
+    border:none; border-radius:40px; padding:14px 30px; cursor:pointer;
+    box-shadow:0 0 22px var(--cyan-glow);
+    transition: transform .15s, box-shadow .2s, background .2s;
+    min-width:190px;
   }
-  .console::before{
-    content:"VOICE LINK"; position:absolute; top:-11px; left:20px;
-    background:var(--bg-void); padding:0 8px;
-    font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:4px;
-    color:var(--amber);
-  }
+  .btn-ligar:hover{ transform:translateY(-1px); box-shadow:0 0 32px var(--cyan-glow); }
+  .btn-ligar.ativo{ background:transparent; color:var(--red); border:1px solid var(--red); box-shadow:0 0 18px rgba(255,93,108,0.35); }
+  .btn-ligar:disabled{ opacity:0.6; cursor:wait; }
 
-  .console-row{
-    display:flex; justify-content:space-between; align-items:center;
-    font-size:12px; color:var(--text-lo); letter-spacing:1px;
-    margin-bottom:16px;
-    padding-bottom:12px;
-    border-bottom:1px solid var(--line);
+  .comando{
+    width:min(100%, 560px);
+    display:flex; gap:10px;
   }
-  .console-row b{ color:var(--text-hi); font-weight:600; }
+  .comando input{
+    flex:1; min-width:0;
+    background:rgba(11,20,28,0.85); color:var(--text-hi);
+    border:1px solid var(--line); border-radius:10px;
+    font-family:'Rajdhani', sans-serif; font-size:16px; letter-spacing:0.5px;
+    padding:11px 14px;
+  }
+  .comando input::placeholder{ color:var(--text-lo); }
 
-  .widget-host{
+  /* transcrição */
+  .console{ width:min(100%, 560px); }
+  .console h2{ left:20px; }
+  .falas{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; max-height:300px; overflow-y:auto; scroll-behavior:smooth; }
+  .falas li{ font-size:16px; line-height:1.4; display:flex; gap:10px; }
+  .falas .quem{
+    flex-shrink:0; width:62px;
+    font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:2px; padding-top:4px;
+  }
+  .falas li.renato .quem{ color:var(--text-lo); }
+  .falas li.jarvis .quem{ color:var(--cyan); }
+  .falas li.ferramenta{ font-size:13px; color:var(--violet); letter-spacing:0.5px; }
+  .falas li.ferramenta .quem{ color:var(--violet); }
+
+  /* visão */
+  .visao-tela{
+    position:relative; aspect-ratio:4/3; border-radius:10px; overflow:hidden;
+    background:#03070a; border:1px solid var(--line);
     display:flex; align-items:center; justify-content:center;
-    min-height:90px;
   }
+  .visao-tela video, .visao-tela img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .visao-tela video{ transform:scaleX(-1); }
+  .visao-tela .aviso{ position:absolute; color:var(--text-lo); font-size:13px; letter-spacing:1px; text-align:center; padding:0 18px; }
+  .visao-tela::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:
+      linear-gradient(var(--cyan), var(--cyan)) top left / 16px 1px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) top left / 1px 16px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) bottom right / 16px 1px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) bottom right / 1px 16px no-repeat;
+    opacity:0.8;
+  }
+  .visao-tela.escaneando::before{
+    content:""; position:absolute; left:0; right:0; height:30%; z-index:1;
+    background:linear-gradient(180deg, transparent, rgba(77,232,240,0.35), transparent);
+    animation: scan 1.2s linear infinite;
+  }
+  @keyframes scan{ from{ top:-30%; } to{ top:100%; } }
+  .visao-descricao{ font-size:14px; line-height:1.4; color:var(--text-hi); margin:10px 0 0 0; min-height:1.4em; }
+  .visao-acoes{ display:flex; gap:8px; margin-top:10px; }
+  .btn-sec{
+    flex:1;
+    font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:2px;
+    background:transparent; color:var(--cyan); border:1px solid var(--line);
+    border-radius:8px; padding:9px 10px; cursor:pointer;
+  }
+  .btn-sec:hover{ border-color:var(--cyan-dim); background:rgba(77,232,240,0.06); }
+  .btn-sec:disabled{ opacity:0.45; cursor:not-allowed; }
+
+  /* atividade */
+  .atividade li{ font-size:13px; }
+  .atividade .hora{ min-width:40px; color:var(--text-lo); font-size:10px; }
+  .atividade li.ok .texto{ color:var(--green); }
+  .atividade li.erro .texto{ color:var(--red); }
+  .atividade li.ferramenta .texto{ color:var(--violet); }
 
   footer{
     text-align:center;
@@ -206,13 +355,77 @@
     opacity:0.6;
   }
 
-  @media (max-width: 640px){
-    header{ padding:22px 20px 0 20px; flex-direction:column; gap:14px; }
+  /* ---------- diálogos ---------- */
+  dialog{
+    width:min(92vw, 460px);
+    background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
+    color:var(--text-hi);
+    border:1px solid var(--cyan-dim); border-radius:14px;
+    padding:26px 24px 22px 24px;
+    box-shadow:0 0 40px rgba(77,232,240,0.15);
+  }
+  dialog::backdrop{ background:rgba(2,4,7,0.75); backdrop-filter:blur(3px); }
+  dialog h3{
+    margin:0 0 6px 0;
+    font-family:'Orbitron', sans-serif; font-size:14px; letter-spacing:4px; color:var(--cyan);
+  }
+  dialog p{ margin:0 0 16px 0; color:var(--text-lo); font-size:14px; line-height:1.45; }
+  dialog label{ display:block; font-size:12px; letter-spacing:2px; color:var(--text-lo); margin:12px 0 6px 0; text-transform:uppercase; }
+  dialog input{
+    width:100%;
+    background:rgba(5,10,15,0.8); color:var(--text-hi);
+    border:1px solid var(--line); border-radius:8px;
+    font-family:'Rajdhani', sans-serif; font-size:15px;
+    padding:10px 12px;
+  }
+  .dialog-acoes{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+  .dialog-acoes .btn-sec{ flex:0 0 auto; padding:10px 16px; }
+  .dialog-acoes .btn-pri{
+    font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:2px; font-weight:700;
+    background:var(--cyan); color:var(--bg-void); border:none; border-radius:8px; padding:10px 18px; cursor:pointer;
+  }
+  .resultado-teste{ font-size:13px; margin-top:12px; min-height:1.2em; }
+  .resultado-teste.ok{ color:var(--green); }
+  .resultado-teste.erro{ color:var(--red); }
+
+  .aprovacao dl{ margin:0; display:grid; grid-template-columns:auto 1fr; gap:6px 12px; font-size:14px; }
+  .aprovacao dt{ color:var(--text-lo); text-transform:uppercase; font-size:11px; letter-spacing:1.5px; padding-top:2px; }
+  .aprovacao dd{ margin:0; white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow-y:auto; }
+  .aprovacao .btn-recusar{ color:var(--red); border-color:rgba(255,93,108,0.5); }
+
+  .sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+  /* ---------- responsivo ---------- */
+  @media (max-width: 1180px){
+    main{ grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
+    .col-centro{ grid-column:1; grid-row:1 / span 2; }
+    .col-dir{ grid-column:2; grid-row:1; }
+    .col-esq{ grid-column:2; grid-row:2; }
+  }
+  @media (max-width: 820px){
+    header{ padding:22px 16px 0 16px; flex-wrap:wrap; gap:14px; }
+    .header-dir{ width:100%; justify-content:space-between; }
     .statusblock{ text-align:left; }
+    main{ grid-template-columns: minmax(0, 1fr); padding:20px 16px 32px 16px; }
+    .col-centro, .col-dir, .col-esq{ grid-column:1; grid-row:auto; }
+    .col-centro{ order:1; }
+    .col-dir{ order:2; }
+    .col-esq{ order:3; }
+    .corner{ display:none; }
+    .statusblock{ font-size:12px; }
+    .statusblock .operador{ display:none; }
+  }
+  @media (max-width: 480px){
+    .brand .eyebrow{ letter-spacing:3px; font-size:10px; }
+    .btn-ligar{ min-width:0; padding:13px 22px; }
+    .controles{ gap:12px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .ring, .core-center, .dot, .visao-tela.escaneando::before{ animation:none !important; }
   }
 </style>
 </head>
-<body>
+<body data-estado="offline">
 
   <div class="corner tl"></div>
   <div class="corner tr"></div>
@@ -225,44 +438,740 @@
         <div class="eyebrow">SISTEMA DE ASSISTÊNCIA PESSOAL</div>
         <h1>J.<span>A.R.V.I.S.</span></h1>
       </div>
-      <div class="statusblock">
-        <div><span class="dot"></span>STATUS: ONLINE</div>
-        <div id="clock">--:--:--</div>
-        <div>OPERADOR: RENATO</div>
+      <div class="header-dir">
+        <div class="statusblock">
+          <div><span class="dot off" id="dot-link"></span>LINK: <b id="status-link">OFFLINE</b></div>
+          <div><span class="dot wait" id="dot-n8n"></span>CÉREBRO: <b id="status-n8n">VERIFICANDO</b></div>
+          <div id="relogio">--:--:--</div>
+          <div class="operador">OPERADOR: RENATO</div>
+        </div>
+        <button class="icon-btn" id="btn-config" type="button" aria-label="Configurações">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
       </div>
     </header>
 
     <main>
-      <div class="core-wrap">
-        <div class="ring r1"></div>
-        <div class="ring r2"></div>
-        <div class="ring r3"></div>
-        <div class="core-center"></div>
-        <div class="core-label">NÚCLEO ATIVO</div>
-      </div>
+      <aside class="col col-esq">
+        <section class="painel">
+          <h2>PERFIL</h2>
+          <p class="perfil-texto" id="perfil">Conecte o cérebro para ver o que o Jarvis sabe sobre o senhor.</p>
+        </section>
+        <section class="painel">
+          <h2>MEMÓRIA <span class="contador" id="contador-memorias"></span></h2>
+          <div class="rolagem">
+            <ul class="lista" id="lista-memorias"></ul>
+          </div>
+          <p class="vazio" id="vazio-memorias">Nenhuma memória ainda. Ele aprende enquanto conversa.</p>
+        </section>
+      </aside>
 
-      <div class="console">
-        <div class="console-row">
-          <span>CANAL <b>ELEVENLABS · CONVERSATIONAL AI</b></span>
-          <span><span class="dot"></span>PRONTO</span>
+      <section class="col col-centro">
+        <div class="core-wrap">
+          <canvas id="espectro" aria-hidden="true"></canvas>
+          <div class="ring r1"></div>
+          <div class="ring r2"></div>
+          <div class="ring r3"></div>
+          <div class="core-center"></div>
+          <div class="core-label" id="rotulo-nucleo">EM ESPERA</div>
         </div>
-        <div class="widget-host">
-          <elevenlabs-convai agent-id="agent_6501ksgr3r2tfycsnwcg3c4yab30"></elevenlabs-convai>
-          <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+
+        <div class="controles">
+          <button class="icon-btn alerta" id="btn-mudo" type="button" aria-label="Silenciar microfone" aria-pressed="false" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg>
+          </button>
+          <button class="btn-ligar" id="btn-ligar" type="button">INICIAR</button>
+          <button class="icon-btn" id="btn-camera" type="button" aria-label="Ligar câmera" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          </button>
         </div>
-      </div>
+
+        <form class="comando" id="form-comando" autocomplete="off">
+          <label class="sr-only" for="campo-comando">Comando para o Jarvis</label>
+          <input id="campo-comando" type="text" placeholder="Digite um comando… ex: o que tenho para hoje?">
+          <button class="icon-btn" type="submit" aria-label="Enviar comando">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </button>
+        </form>
+
+        <section class="painel console">
+          <h2>VOICE LINK</h2>
+          <ol class="falas" id="transcricao" aria-live="polite"></ol>
+          <p class="vazio" id="vazio-transcricao">Toque em INICIAR e fale com o Jarvis. A conversa aparece aqui.</p>
+        </section>
+      </section>
+
+      <aside class="col col-dir">
+        <section class="painel">
+          <h2>VISÃO</h2>
+          <div class="visao-tela" id="visao-tela">
+            <video id="video" autoplay playsinline muted hidden></video>
+            <img id="quadro" alt="Último quadro analisado pela câmera" hidden>
+            <span class="aviso" id="aviso-camera">Câmera desligada. Ligue para o Jarvis poder ver o senhor.</span>
+          </div>
+          <p class="visao-descricao" id="visao-descricao"></p>
+          <div class="visao-acoes">
+            <button class="btn-sec" id="btn-olhar" type="button" disabled>ANALISAR AGORA</button>
+          </div>
+        </section>
+        <section class="painel">
+          <h2>AGENDA · HOJE</h2>
+          <ul class="lista" id="lista-agenda"></ul>
+          <p class="vazio" id="vazio-agenda">Nada na agenda hoje.</p>
+        </section>
+        <section class="painel">
+          <h2>ROTINAS</h2>
+          <ul class="lista" id="lista-rotinas"></ul>
+          <p class="vazio" id="vazio-rotinas">Nenhuma rotina cadastrada. Peça: "Jarvis, toda segunda eu treino às 7h".</p>
+        </section>
+        <section class="painel">
+          <h2>TAREFAS <span class="contador" id="contador-tarefas"></span></h2>
+          <div class="rolagem">
+            <ul class="lista" id="lista-tarefas"></ul>
+          </div>
+          <p class="vazio" id="vazio-tarefas">Nenhuma pendência. Tudo em ordem, senhor.</p>
+        </section>
+        <section class="painel">
+          <h2>ATIVIDADE DO CÉREBRO</h2>
+          <div class="rolagem">
+            <ul class="lista atividade" id="lista-atividade"></ul>
+          </div>
+        </section>
+      </aside>
     </main>
 
-    <footer>STARK-CLASS INTERFACE · BUILD LOCAL</footer>
+    <footer>STARK-CLASS INTERFACE · CÉREBRO N8N · VOZ ELEVENLABS</footer>
   </div>
 
-<script>
-  function tick(){
-    const now = new Date();
-    document.getElementById('clock').textContent = now.toLocaleTimeString('pt-BR', {hour12:false});
+  <dialog id="dialog-config">
+    <form method="dialog" id="form-config">
+      <h3>CONFIGURAÇÃO</h3>
+      <p>A chave fica salva só neste navegador. Ela está no arquivo <code>.jarvis-chave.local.txt</code>, na pasta do projeto (fora do GitHub).</p>
+      <label for="cfg-chave">Chave do cérebro</label>
+      <input id="cfg-chave" type="password" autocomplete="off" spellcheck="false" required>
+      <label for="cfg-n8n">Endereço dos webhooks do n8n</label>
+      <input id="cfg-n8n" type="url" spellcheck="false" required>
+      <label for="cfg-agente">ID do agente ElevenLabs</label>
+      <input id="cfg-agente" type="text" spellcheck="false" required>
+      <div class="resultado-teste" id="resultado-teste" role="status"></div>
+      <div class="dialog-acoes">
+        <button class="btn-sec" type="button" id="btn-testar">TESTAR</button>
+        <button class="btn-sec" type="button" id="btn-cancelar-config">FECHAR</button>
+        <button class="btn-pri" type="submit" value="salvar">SALVAR</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dialog-aprovacao" class="aprovacao">
+    <h3 id="aprovacao-titulo">CONFIRMAR AÇÃO</h3>
+    <p id="aprovacao-texto">O Jarvis quer usar uma ferramenta.</p>
+    <dl id="aprovacao-detalhes"></dl>
+    <div class="dialog-acoes">
+      <button class="btn-sec btn-recusar" type="button" id="btn-recusar">RECUSAR</button>
+      <button class="btn-pri" type="button" id="btn-aprovar">APROVAR</button>
+    </div>
+  </dialog>
+
+<script type="module">
+import { Conversation } from 'https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.26.0/+esm';
+
+const PADRAO = {
+  n8n: 'https://n8n.nutriali.cloud/webhook',
+  agente: 'agent_6501ksgr3r2tfycsnwcg3c4yab30',
+  chave: '',
+};
+const FUSO = 'America/Sao_Paulo';
+// ferramentas que mudam o que aparece nos painéis: depois delas recarregamos o contexto
+const MUDAM_DADOS = new Set(['memoria_salvar', 'memoria_esquecer', 'tarefa_criar', 'tarefa_concluir', 'rotina_salvar', 'agenda_criar']);
+const NOMES = {
+  memoria_salvar: 'Gravando memória',
+  memoria_buscar: 'Consultando memória',
+  memoria_esquecer: 'Apagando memória',
+  tarefa_criar: 'Criando tarefa',
+  tarefas_listar: 'Lendo tarefas',
+  tarefa_concluir: 'Concluindo tarefa',
+  rotinas_listar: 'Lendo rotinas',
+  rotina_salvar: 'Salvando rotina',
+  emails_ler: 'Lendo e-mails',
+  email_enviar: 'Enviando e-mail',
+  agenda_listar: 'Consultando agenda',
+  agenda_criar: 'Agendando compromisso',
+  spotify_buscar_musica: 'Procurando música',
+  spotify_buscar_playlist: 'Procurando playlist',
+  spotify_tocar: 'Tocando no Spotify',
+  spotify_fila: 'Colocando na fila',
+  spotify_pausar: 'Pausando música',
+  spotify_continuar: 'Retomando música',
+  spotify_proxima: 'Próxima música',
+  spotify_anterior: 'Música anterior',
+  spotify_volume: 'Ajustando volume',
+  spotify_tocando_agora: 'Vendo o que está tocando',
+  ver_camera: 'Olhando pela câmera',
+};
+const ROTULOS = {
+  offline: ['EM ESPERA', 'OFFLINE'],
+  conectando: ['CONECTANDO', 'CONECTANDO'],
+  ouvindo: ['OUVINDO', 'ONLINE'],
+  falando: ['FALANDO', 'ONLINE'],
+  ferramenta: ['PROCESSANDO', 'ONLINE'],
+};
+const DEMO = new URLSearchParams(location.search).has('demo');
+
+const $ = (id) => document.getElementById(id);
+let config = lerConfig();
+let conversa = null;
+let conversaId = null;
+let mensagens = [];
+let comandoPendente = null;
+let estadoFala = 'ouvindo';
+let ferramentasAtivas = 0;
+let ferramentasVistas = new Set();
+let streamCamera = null;
+let quadroAnimacao = null;
+let timerContexto = null;
+
+// ---------- utilidades ----------
+function el(tag, props = {}, ...filhos) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') n.className = v;
+    else n.setAttribute(k, v);
   }
-  tick();
-  setInterval(tick, 1000);
+  for (const f of filhos) if (f != null) n.append(f);
+  return n;
+}
+
+function lerConfig() {
+  try {
+    return { ...PADRAO, ...JSON.parse(localStorage.getItem('jarvis.config') || '{}') };
+  } catch {
+    return { ...PADRAO };
+  }
+}
+
+function salvarConfig(novo) {
+  config = { ...PADRAO, ...novo };
+  try { localStorage.setItem('jarvis.config', JSON.stringify(config)); } catch {}
+}
+
+function dataLocal(iso) {
+  return new Date(iso);
+}
+
+function horaCurta(iso) {
+  if (!iso || iso.length <= 10) return 'dia';
+  return dataLocal(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO });
+}
+
+function chaveDia(d) {
+  return d.toLocaleDateString('en-CA', { timeZone: FUSO });
+}
+
+function descreverPrazo(iso) {
+  if (!iso) return { texto: 'sem prazo', classe: '' };
+  const d = dataLocal(iso);
+  const agora = new Date();
+  const amanha = new Date(agora.getTime() + 86400000);
+  const hora = horaCurta(iso);
+  if (d < agora) return { texto: `atrasada · ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: FUSO })} ${hora}`, classe: 'atrasada' };
+  if (chaveDia(d) === chaveDia(agora)) return { texto: `hoje · ${hora}`, classe: 'hoje' };
+  if (chaveDia(d) === chaveDia(amanha)) return { texto: `amanhã · ${hora}`, classe: '' };
+  return { texto: d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: FUSO }) + ` · ${hora}`, classe: '' };
+}
+
+function preencherLista(idLista, idVazio, itens, montar) {
+  const lista = $(idLista);
+  lista.replaceChildren(...itens.map(montar));
+  $(idVazio).hidden = itens.length > 0;
+}
+
+// ---------- n8n ----------
+async function chamarN8n(caminho, { method = 'GET', body, keepalive = false } = {}) {
+  const resp = await fetch(`${config.n8n.replace(/\/+$/, '')}/${caminho}`, {
+    method,
+    keepalive,
+    headers: { 'x-jarvis-key': config.chave, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!resp.ok) throw new Error(`o n8n respondeu ${resp.status}`);
+  const texto = await resp.text();
+  return texto ? JSON.parse(texto) : {};
+}
+
+function definirN8n(estado) {
+  const mapa = { online: ['ONLINE', ''], offline: ['OFFLINE', 'off'], 'sem chave': ['SEM CHAVE', 'off'], verificando: ['VERIFICANDO', 'wait'], demo: ['DEMONSTRAÇÃO', 'wait'] };
+  const [texto, classe] = mapa[estado] || mapa.offline;
+  $('status-n8n').textContent = texto;
+  $('dot-n8n').className = `dot ${classe}`;
+}
+
+async function carregarContexto() {
+  if (DEMO) {
+    renderizarContexto(contextoDemo());
+    definirN8n('demo');
+    return contextoDemo();
+  }
+  if (!config.chave) {
+    definirN8n('sem chave');
+    return null;
+  }
+  try {
+    const dados = await chamarN8n('jarvis/contexto');
+    if (!dados.ok) throw new Error('chave recusada pelo n8n');
+    renderizarContexto(dados);
+    definirN8n('online');
+    return dados;
+  } catch (erro) {
+    definirN8n('offline');
+    registrarAtividade(`Cérebro indisponível: ${erro.message}`, 'erro');
+    return null;
+  }
+}
+
+function recarregarContextoEmBreve(ms = 1500) {
+  clearTimeout(timerContexto);
+  timerContexto = setTimeout(carregarContexto, ms);
+}
+
+function renderizarContexto(ctx) {
+  $('perfil').textContent = (ctx.perfil || '').trim() || 'Ainda não sei muito sobre o senhor. Converse comigo e eu aprendo.';
+
+  const memorias = ctx.memorias || [];
+  $('contador-memorias').textContent = memorias.length ? `· ${memorias.length}` : '';
+  preencherLista('lista-memorias', 'vazio-memorias', memorias, (m) =>
+    el('li', {}, el('span', { class: 'chip' }, m.categoria || 'fato'), el('span', { class: 'texto' }, m.conteudo || '')));
+
+  preencherLista('lista-agenda', 'vazio-agenda', ctx.agenda || [], (e) =>
+    el('li', {}, el('span', { class: 'hora' }, horaCurta(e.inicio)),
+      el('span', { class: 'texto' }, e.titulo, e.local ? el('span', { class: 'sub' }, e.local) : null)));
+
+  const rotinas = [...(ctx.rotinas || [])].sort((a, b) => (b.hoje - a.hoje) || String(a.horario).localeCompare(String(b.horario)));
+  preencherLista('lista-rotinas', 'vazio-rotinas', rotinas, (r) =>
+    el('li', {}, el('span', { class: 'hora' }, r.horario || '--:--'),
+      el('span', { class: 'texto' }, r.nome, el('span', { class: 'sub' }, r.dias || '')),
+      r.hoje ? el('span', { class: 'chip hoje' }, 'hoje') : null));
+
+  const tarefas = ctx.tarefas || [];
+  $('contador-tarefas').textContent = tarefas.length ? `· ${tarefas.length}` : '';
+  preencherLista('lista-tarefas', 'vazio-tarefas', tarefas, (t) => {
+    const prazo = descreverPrazo(t.vence_em);
+    return el('li', {},
+      el('span', { class: 'texto' }, t.titulo, el('span', { class: 'sub' }, prazo.texto)),
+      t.prioridade === 'alta' ? el('span', { class: 'chip alta' }, 'alta') : prazo.classe ? el('span', { class: `chip ${prazo.classe}` }, prazo.classe) : null);
+  });
+}
+
+function variaveisPadrao() {
+  return {
+    data_hora: new Date().toLocaleString('pt-BR', { dateStyle: 'full', timeStyle: 'short', timeZone: FUSO }),
+    perfil: 'Ainda não sei muito sobre o Renato.',
+    memoria: 'Memória indisponível agora.',
+    tarefas: 'Lista de tarefas indisponível agora.',
+    agenda_hoje: 'Agenda indisponível agora.',
+    rotinas_hoje: 'Rotinas indisponíveis agora.',
+  };
+}
+
+// ---------- estado visual ----------
+function definirEstado(estado) {
+  document.body.dataset.estado = estado;
+  const [nucleo, link] = ROTULOS[estado] || ROTULOS.offline;
+  $('rotulo-nucleo').textContent = nucleo;
+  $('status-link').textContent = link;
+  $('dot-link').className = `dot ${estado === 'offline' ? 'off' : estado === 'conectando' ? 'wait' : ''}`;
+}
+
+function atualizarEstadoFala() {
+  if (!conversa) return;
+  definirEstado(ferramentasAtivas > 0 ? 'ferramenta' : estadoFala);
+}
+
+function adicionarFala(de, texto) {
+  if (!texto || !texto.trim()) return;
+  if (de !== 'ferramenta') mensagens.push({ de, texto, em: new Date().toISOString() });
+  const rotulo = { renato: 'RENATO', jarvis: 'JARVIS', ferramenta: 'CÉREBRO' }[de];
+  const lista = $('transcricao');
+  lista.append(el('li', { class: de }, el('span', { class: 'quem' }, rotulo), el('span', {}, texto)));
+  lista.scrollTop = lista.scrollHeight;
+  $('vazio-transcricao').hidden = true;
+}
+
+function registrarAtividade(texto, tipo = '') {
+  const lista = $('lista-atividade');
+  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO });
+  lista.prepend(el('li', { class: tipo }, el('span', { class: 'hora' }, hora), el('span', { class: 'texto' }, texto)));
+  while (lista.children.length > 40) lista.lastChild.remove();
+}
+
+// ---------- espectro do núcleo ----------
+function animar() {
+  const canvas = $('espectro');
+  const ctx = canvas.getContext('2d');
+  const cor = () => getComputedStyle(document.body).getPropertyValue('--core').trim() || '#4de8f0';
+  const passo = () => {
+    const lado = canvas.clientWidth * devicePixelRatio;
+    if (canvas.width !== lado) { canvas.width = lado; canvas.height = lado; }
+    ctx.clearRect(0, 0, lado, lado);
+    if (!conversa) { document.body.style.setProperty('--nivel', 0); return; }
+
+    const falando = estadoFala === 'falando';
+    const nivel = falando ? conversa.getOutputVolume() : conversa.getInputVolume();
+    document.body.style.setProperty('--nivel', Math.min(1, nivel * 1.6).toFixed(3));
+
+    const freq = falando ? conversa.getOutputByteFrequencyData() : conversa.getInputByteFrequencyData();
+    const barras = 72;
+    const centro = lado / 2;
+    const raio = lado * 0.36;
+    ctx.strokeStyle = cor();
+    ctx.lineWidth = Math.max(2, lado * 0.006);
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = 0.85;
+    for (let i = 0; i < barras; i++) {
+      const v = freq.length ? freq[Math.floor((i % (barras / 2)) / (barras / 2) * freq.length * 0.7)] / 255 : 0;
+      const comp = lado * 0.015 + v * lado * 0.09;
+      const ang = (i / barras) * Math.PI * 2 - Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(centro + Math.cos(ang) * raio, centro + Math.sin(ang) * raio);
+      ctx.lineTo(centro + Math.cos(ang) * (raio + comp), centro + Math.sin(ang) * (raio + comp));
+      ctx.stroke();
+    }
+    quadroAnimacao = requestAnimationFrame(passo);
+  };
+  cancelAnimationFrame(quadroAnimacao);
+  quadroAnimacao = requestAnimationFrame(passo);
+}
+
+// ---------- câmera ----------
+async function ligarCamera() {
+  if (streamCamera) return true;
+  try {
+    streamCamera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }, audio: false });
+  } catch (erro) {
+    registrarAtividade(`Câmera bloqueada: ${erro.message}`, 'erro');
+    return false;
+  }
+  const video = $('video');
+  video.srcObject = streamCamera;
+  video.hidden = false;
+  $('quadro').hidden = true;
+  $('aviso-camera').hidden = true;
+  $('btn-camera').setAttribute('aria-pressed', 'true');
+  $('btn-camera').setAttribute('aria-label', 'Desligar câmera');
+  $('btn-olhar').disabled = false;
+  registrarAtividade('Câmera ligada', 'ok');
+  return true;
+}
+
+function desligarCamera() {
+  if (!streamCamera) return;
+  streamCamera.getTracks().forEach((t) => t.stop());
+  streamCamera = null;
+  $('video').hidden = true;
+  $('video').srcObject = null;
+  $('aviso-camera').hidden = !$('quadro').hidden;
+  $('btn-camera').setAttribute('aria-pressed', 'false');
+  $('btn-camera').setAttribute('aria-label', 'Ligar câmera');
+  $('btn-olhar').disabled = true;
+}
+
+function capturarQuadro() {
+  const video = $('video');
+  const largura = Math.min(768, video.videoWidth || 768);
+  const altura = Math.round(largura * ((video.videoHeight || 576) / (video.videoWidth || 768)));
+  const canvas = el('canvas');
+  canvas.width = largura;
+  canvas.height = altura;
+  canvas.getContext('2d').drawImage(video, 0, 0, largura, altura);
+  return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+async function olhar(pergunta) {
+  if (!(await ligarCamera())) return 'Não consegui acessar a câmera: o Renato precisa permitir o uso da câmera no navegador.';
+  const video = $('video');
+  if (!video.videoWidth) await new Promise((ok) => video.addEventListener('loadeddata', ok, { once: true }));
+  const imagem = capturarQuadro();
+  const tela = $('visao-tela');
+  tela.classList.add('escaneando');
+  $('visao-descricao').textContent = 'Analisando…';
+  try {
+    const resposta = await chamarN8n('jarvis/visao', { method: 'POST', body: { imagem, pergunta: pergunta || 'O que você vê agora?' } });
+    const descricao = resposta.descricao || 'Não consegui interpretar a imagem.';
+    $('visao-descricao').textContent = descricao;
+    registrarAtividade('Visão: imagem analisada', 'ok');
+    return descricao;
+  } catch (erro) {
+    $('visao-descricao').textContent = `Falha na visão: ${erro.message}`;
+    registrarAtividade(`Visão falhou: ${erro.message}`, 'erro');
+    return `A análise da câmera falhou (${erro.message}).`;
+  } finally {
+    tela.classList.remove('escaneando');
+  }
+}
+
+// ---------- ferramentas e aprovação ----------
+function aoChamarFerramenta(chamada) {
+  const nome = NOMES[chamada.tool_name] || chamada.tool_name;
+  ferramentasVistas.add(chamada.tool_call_id);
+  if (chamada.state === 'loading') {
+    ferramentasAtivas++;
+    adicionarFala('ferramenta', `${nome}…`);
+    registrarAtividade(`▸ ${nome}`, 'ferramenta');
+  } else if (chamada.state === 'success') {
+    registrarAtividade(`✓ ${nome}`, 'ok');
+    if (MUDAM_DADOS.has(chamada.tool_name)) recarregarContextoEmBreve();
+  } else if (chamada.state === 'failure') {
+    registrarAtividade(`✗ ${nome}: ${chamada.error_message || 'falhou'}`, 'erro');
+  }
+  if (chamada.state === 'success' || chamada.state === 'failure') ferramentasAtivas = Math.max(0, ferramentasAtivas - 1);
+  atualizarEstadoFala();
+}
+
+function aoResponderFerramenta(resposta) {
+  // as ferramentas MCP já foram registradas em aoChamarFerramenta
+  if (!resposta?.tool_name || ferramentasVistas.has(resposta.tool_call_id)) return;
+  const nome = NOMES[resposta.tool_name] || resposta.tool_name;
+  registrarAtividade(`${resposta.is_error ? '✗' : '✓'} ${nome}`, resposta.is_error ? 'erro' : 'ok');
+}
+
+function pedirAprovacao(chamada, { signal }) {
+  const dialogo = $('dialog-aprovacao');
+  const nome = NOMES[chamada.tool_name] || chamada.tool_name;
+  $('aprovacao-titulo').textContent = nome.toUpperCase();
+  $('aprovacao-texto').textContent = `O Jarvis pediu permissão para: ${nome.toLowerCase()}.`;
+  $('aprovacao-detalhes').replaceChildren(...Object.entries(chamada.parameters || {}).flatMap(([k, v]) =>
+    [el('dt', {}, k), el('dd', {}, typeof v === 'string' ? v : JSON.stringify(v))]));
+  return new Promise((resolver) => {
+    const fechar = (aprovado) => {
+      dialogo.close();
+      $('btn-aprovar').onclick = $('btn-recusar').onclick = null;
+      registrarAtividade(`${aprovado ? 'Aprovado' : 'Recusado'}: ${nome}`, aprovado ? 'ok' : 'erro');
+      resolver(aprovado);
+    };
+    $('btn-aprovar').onclick = () => fechar(true);
+    $('btn-recusar').onclick = () => fechar(false);
+    signal.addEventListener('abort', () => dialogo.close(), { once: true });
+    dialogo.showModal();
+  });
+}
+
+// ---------- conversa ----------
+async function ligar() {
+  if (!config.chave && !DEMO) {
+    abrirConfig();
+    return;
+  }
+  const botao = $('btn-ligar');
+  botao.disabled = true;
+  definirEstado('conectando');
+  mensagens = [];
+  conversaId = null;
+  ferramentasAtivas = 0;
+  ferramentasVistas = new Set();
+  $('transcricao').replaceChildren();
+  try {
+    const microfone = await navigator.mediaDevices.getUserMedia({ audio: true });
+    microfone.getTracks().forEach((t) => t.stop());
+    const ctx = await carregarContexto();
+    conversa = await Conversation.startSession({
+      agentId: config.agente,
+      connectionType: 'webrtc',
+      dynamicVariables: { ...variaveisPadrao(), ...(ctx?.variaveis || {}) },
+      clientTools: { ver_camera: ({ pergunta } = {}) => olhar(pergunta) },
+      onConnect: ({ conversationId }) => {
+        conversaId = conversationId;
+        registrarAtividade('Link de voz estabelecido', 'ok');
+      },
+      onDisconnect: aoDesconectar,
+      onError: (mensagem) => registrarAtividade(`Erro: ${mensagem}`, 'erro'),
+      onMessage: ({ message, role }) => adicionarFala(role === 'user' ? 'renato' : 'jarvis', message),
+      onModeChange: ({ mode }) => {
+        estadoFala = mode === 'speaking' ? 'falando' : 'ouvindo';
+        atualizarEstadoFala();
+      },
+      onMCPToolCall: aoChamarFerramenta,
+      onAgentToolResponse: aoResponderFerramenta,
+      onMCPToolApprovalRequest: pedirAprovacao,
+      onMCPConnectionStatus: ({ integrations = [] }) => {
+        for (const i of integrations) {
+          registrarAtividade(i.is_connected ? `Cérebro MCP conectado · ${i.tool_count} ferramentas` : 'Cérebro MCP desconectado', i.is_connected ? 'ok' : 'erro');
+        }
+      },
+    });
+    estadoFala = 'ouvindo';
+    atualizarEstadoFala();
+    botao.textContent = 'ENCERRAR';
+    botao.classList.add('ativo');
+    $('btn-mudo').disabled = false;
+    animar();
+    if (comandoPendente) {
+      conversa.sendUserMessage(comandoPendente);
+      adicionarFala('renato', comandoPendente);
+      comandoPendente = null;
+    }
+  } catch (erro) {
+    conversa = null;
+    definirEstado('offline');
+    registrarAtividade(`Não consegui conectar: ${erro.message}`, 'erro');
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+async function desligar() {
+  if (!conversa) return;
+  $('btn-ligar').disabled = true;
+  await conversa.endSession();
+}
+
+function enviarConversaParaMemoria({ keepalive = false } = {}) {
+  const falou = mensagens.some((m) => m.de === 'renato');
+  if (!falou || DEMO) return Promise.resolve(false);
+  const corpo = { conversa_id: conversaId || `local-${Date.now()}`, mensagens };
+  mensagens = [];
+  return chamarN8n('jarvis/conversa', { method: 'POST', body: corpo, keepalive }).then(() => true);
+}
+
+async function aoDesconectar(detalhes) {
+  cancelAnimationFrame(quadroAnimacao);
+  conversa = null;
+  ferramentasAtivas = 0;
+  definirEstado('offline');
+  document.body.style.setProperty('--nivel', 0);
+  $('espectro').getContext('2d').clearRect(0, 0, $('espectro').width, $('espectro').height);
+  const botao = $('btn-ligar');
+  botao.textContent = 'INICIAR';
+  botao.classList.remove('ativo');
+  botao.disabled = false;
+  $('btn-mudo').disabled = true;
+  $('btn-mudo').setAttribute('aria-pressed', 'false');
+  if (detalhes?.reason === 'error') registrarAtividade(`Link caiu: ${detalhes.message}`, 'erro');
+  else registrarAtividade('Link de voz encerrado');
+  try {
+    if (await enviarConversaParaMemoria()) {
+      registrarAtividade('Memória: guardando o que aprendi nesta conversa', 'ferramenta');
+      recarregarContextoEmBreve(9000);
+    }
+  } catch (erro) {
+    registrarAtividade(`Não consegui guardar a conversa: ${erro.message}`, 'erro');
+  }
+}
+
+// ---------- configuração ----------
+function abrirConfig() {
+  $('cfg-chave').value = config.chave;
+  $('cfg-n8n').value = config.n8n;
+  $('cfg-agente').value = config.agente;
+  $('resultado-teste').textContent = '';
+  $('resultado-teste').className = 'resultado-teste';
+  $('dialog-config').showModal();
+}
+
+async function testarConfig() {
+  const anterior = config;
+  const saida = $('resultado-teste');
+  config = { ...config, chave: $('cfg-chave').value.trim(), n8n: $('cfg-n8n').value.trim() };
+  saida.className = 'resultado-teste';
+  saida.textContent = 'Testando…';
+  try {
+    const dados = await chamarN8n('jarvis/contexto');
+    if (!dados.ok) throw new Error('o n8n recusou a chave');
+    saida.textContent = `Conectado. ${dados.memorias?.length || 0} memórias e ${dados.tarefas?.length || 0} tarefas encontradas.`;
+    saida.classList.add('ok');
+  } catch (erro) {
+    saida.textContent = `Falhou: ${erro.message}`;
+    saida.classList.add('erro');
+  } finally {
+    config = anterior;
+  }
+}
+
+function contextoDemo() {
+  const hoje = new Date();
+  const em = (h, dias = 0) => { const d = new Date(hoje); d.setDate(d.getDate() + dias); d.setHours(h, 0, 0, 0); return d.toISOString(); };
+  return {
+    ok: true,
+    perfil: '- Renato, desenvolvedor e criador do NutriConnect\n- Gosta de automação com n8n e IA\n- Prefere respostas curtas e diretas',
+    memorias: [
+      { categoria: 'projeto', conteudo: 'Renato está construindo o NutriConnect com a assistente Ali' },
+      { categoria: 'preferencia', conteudo: 'Renato prefere café sem açúcar' },
+      { categoria: 'rotina', conteudo: 'Renato treina de manhã antes do trabalho' },
+    ],
+    tarefas: [
+      { titulo: 'Revisar o fluxo do NutriConnect', vence_em: em(18), prioridade: 'alta' },
+      { titulo: 'Ligar para o contador', vence_em: em(10, 1), prioridade: 'media' },
+    ],
+    rotinas: [
+      { nome: 'Academia', dias: 'seg,qua,sex', horario: '07:00', hoje: true },
+      { nome: 'Estudo de IA', dias: 'ter,qui', horario: '20:00', hoje: false },
+    ],
+    agenda: [{ titulo: 'Reunião com cliente', inicio: em(15), local: 'Google Meet' }],
+    variaveis: variaveisPadrao(),
+  };
+}
+
+// ---------- eventos ----------
+$('btn-ligar').addEventListener('click', () => (conversa ? desligar() : ligar()));
+
+$('btn-mudo').addEventListener('click', () => {
+  if (!conversa) return;
+  const mudo = $('btn-mudo').getAttribute('aria-pressed') !== 'true';
+  conversa.setMicMuted(mudo);
+  $('btn-mudo').setAttribute('aria-pressed', String(mudo));
+  $('btn-mudo').setAttribute('aria-label', mudo ? 'Ativar microfone' : 'Silenciar microfone');
+});
+
+$('btn-camera').addEventListener('click', () => (streamCamera ? desligarCamera() : ligarCamera()));
+
+$('btn-olhar').addEventListener('click', async () => {
+  const descricao = await olhar('Descreva o que você vê agora.');
+  if (conversa) conversa.sendContextualUpdate(`O Renato pediu uma análise da câmera. Resultado: ${descricao}`);
+});
+
+$('form-comando').addEventListener('submit', (evento) => {
+  evento.preventDefault();
+  const campo = $('campo-comando');
+  const texto = campo.value.trim();
+  if (!texto) return;
+  campo.value = '';
+  if (conversa) {
+    conversa.sendUserMessage(texto);
+    adicionarFala('renato', texto);
+  } else {
+    comandoPendente = texto;
+    ligar();
+  }
+});
+
+$('btn-config').addEventListener('click', abrirConfig);
+$('btn-testar').addEventListener('click', testarConfig);
+$('btn-cancelar-config').addEventListener('click', () => $('dialog-config').close());
+$('form-config').addEventListener('submit', () => {
+  salvarConfig({ chave: $('cfg-chave').value.trim(), n8n: $('cfg-n8n').value.trim(), agente: $('cfg-agente').value.trim() });
+  registrarAtividade('Configuração salva', 'ok');
+  definirN8n('verificando');
+  carregarContexto();
+});
+
+// se a aba fechar no meio da conversa, ainda tenta guardar a memória
+addEventListener('pagehide', () => {
+  if (conversa) enviarConversaParaMemoria({ keepalive: true }).catch(() => {});
+});
+
+function tick() {
+  const agora = new Date();
+  $('relogio').textContent = agora.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: FUSO }).toUpperCase();
+}
+tick();
+setInterval(tick, 1000);
+setInterval(() => { if (!conversa) carregarContexto(); }, 5 * 60 * 1000);
+
+definirEstado('offline');
+if (!config.chave && !DEMO) {
+  definirN8n('sem chave');
+  abrirConfig();
+} else {
+  carregarContexto();
+}
 </script>
 
 </body>
