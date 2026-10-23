@@ -1229,7 +1229,8 @@ async function iniciarReconhecimento() {
     return;
   }
   definirChip('visao', 'on', 'RASTREANDO');
-  atualizarFicha({ status: id.rosto ? 'PROCURANDO ROSTO' : 'CADASTRE SEU ROSTO', classeStatus: id.rosto ? '' : 'alerta' });
+  // a primeira leitura compila os shaders da placa de vídeo e pode levar alguns segundos
+  atualizarFicha({ status: 'CALIBRANDO SENSOR…', classeStatus: '' });
   $('btn-cadastrar').textContent = id.rosto ? 'RECADASTRAR' : 'CADASTRAR ROSTO';
   const ciclo = async () => {
     if (!id.rodando || !streamCamera) return;
