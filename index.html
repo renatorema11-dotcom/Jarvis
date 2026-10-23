@@ -338,6 +338,12 @@
   }
   .btn-sec:hover{ border-color:var(--cyan-dim); background:rgba(77,232,240,0.06); }
   .btn-sec:disabled{ opacity:0.45; cursor:not-allowed; }
+  a.btn-sec{ display:inline-flex; align-items:center; justify-content:center; text-align:center; text-decoration:none; }
+
+  /* spotify */
+  .spotify-nome{ font-size:18px; font-weight:600; margin:2px 0 2px 0; overflow-wrap:anywhere; }
+  .spotify-detalhe{ font-size:14px; color:var(--text-lo); margin:0; line-height:1.4; }
+  #painel-spotify.alerta .spotify-detalhe{ color:var(--amber); }
 
   /* atividade */
   .atividade li{ font-size:13px; }
@@ -502,6 +508,15 @@
       </section>
 
       <aside class="col col-dir">
+        <section class="painel" id="painel-spotify" hidden>
+          <h2>SPOTIFY</h2>
+          <p class="spotify-nome" id="spotify-nome"></p>
+          <p class="spotify-detalhe" id="spotify-detalhe"></p>
+          <div class="visao-acoes">
+            <a class="btn-sec" id="spotify-app" href="#">ABRIR NO APP</a>
+            <a class="btn-sec" id="spotify-web" href="#" target="_blank" rel="noopener">ABRIR NO NAVEGADOR</a>
+          </div>
+        </section>
         <section class="painel">
           <h2>VISÃO</h2>
           <div class="visao-tela" id="visao-tela">
@@ -596,10 +611,8 @@ const NOMES = {
   email_enviar: 'Enviando e-mail',
   agenda_listar: 'Consultando agenda',
   agenda_criar: 'Agendando compromisso',
-  spotify_buscar_musica: 'Procurando música',
-  spotify_buscar_playlist: 'Procurando playlist',
+  spotify_minhas_playlists: 'Lendo suas playlists',
   spotify_tocar: 'Tocando no Spotify',
-  spotify_fila: 'Colocando na fila',
   spotify_pausar: 'Pausando música',
   spotify_continuar: 'Retomando música',
   spotify_proxima: 'Próxima música',
@@ -908,6 +921,38 @@ async function olhar(pergunta) {
   }
 }
 
+// ---------- spotify ----------
+const LINK_SPOTIFY = /^https:\/\/open\.spotify\.com\/(playlist|album|artist|track)\/([A-Za-z0-9]+)/;
+
+function mostrarSpotify({ nome, detalhe, url, alerta = false }) {
+  const link = LINK_SPOTIFY.exec(url || '');
+  $('spotify-nome').textContent = nome || 'Spotify';
+  $('spotify-detalhe').textContent = detalhe || '';
+  $('spotify-app').href = link ? `spotify:${link[1]}:${link[2]}` : 'spotify:';
+  $('spotify-web').href = link ? link[0] : 'https://open.spotify.com';
+  $('painel-spotify').classList.toggle('alerta', alerta);
+  $('painel-spotify').hidden = false;
+}
+
+// sem nenhum Spotify aberto, a API não consegue tocar: abrimos a playlist aqui para o Renato dar play
+function abrirSpotify({ url, nome } = {}) {
+  if (!LINK_SPOTIFY.test(url || '')) return;
+  mostrarSpotify({ nome, url, alerta: true, detalhe: 'Nenhum Spotify estava aberto. Toque em um dos botões e dê play.' });
+  const aba = window.open(url, '_blank');
+  if (aba) aba.opener = null;
+  registrarAtividade(`Spotify: abrindo ${nome || 'playlist'}`, 'ferramenta');
+}
+
+function resultadoDaFerramenta(chamada) {
+  const texto = (chamada.result || []).map((r) => r.text || '').join('');
+  try {
+    const dados = JSON.parse(texto);
+    return Array.isArray(dados) ? dados[0] : dados;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- ferramentas e aprovação ----------
 function aoChamarFerramenta(chamada) {
   const nome = NOMES[chamada.tool_name] || chamada.tool_name;
@@ -919,6 +964,12 @@ function aoChamarFerramenta(chamada) {
   } else if (chamada.state === 'success') {
     registrarAtividade(`✓ ${nome}`, 'ok');
     if (MUDAM_DADOS.has(chamada.tool_name)) recarregarContextoEmBreve();
+    if (chamada.tool_name === 'spotify_tocar') {
+      const r = resultadoDaFerramenta(chamada);
+      if (r?.ok) mostrarSpotify({ nome: r.nome, url: r.url, detalhe: `Tocando no ${r.aparelho}${r.tocando_agora ? ' · ' + r.tocando_agora : ''}` });
+      else if (r?.motivo === 'sem_aparelho') abrirSpotify({ url: r.url, nome: r.nome });
+      else if (r) mostrarSpotify({ nome: r.nome || 'Spotify', url: r.url, alerta: true, detalhe: r.mensagem });
+    }
   } else if (chamada.state === 'failure') {
     registrarAtividade(`✗ ${nome}: ${chamada.error_message || 'falhou'}`, 'erro');
   }
