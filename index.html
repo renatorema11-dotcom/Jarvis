@@ -6,29 +6,38 @@
 <title>J.A.R.V.I.S. — Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg-void: #050a0f;
-    --bg-panel: #0b141c;
-    --bg-panel-2: #0e1c26;
+    --bg-void: #03070b;
+    --bg-deep: #061019;
+    --glass: rgba(9, 22, 32, 0.62);
+    --glass-hi: rgba(14, 34, 48, 0.78);
     --cyan: #4de8f0;
-    --cyan-dim: #1c5a63;
-    --cyan-glow: rgba(77,232,240,0.55);
-    --amber: #ff8a3d;
-    --amber-glow: rgba(255,138,61,0.55);
-    --violet: #b28cff;
-    --violet-glow: rgba(178,140,255,0.55);
+    --cyan-soft: #8ff3f7;
+    --cyan-dim: #1b5961;
+    --cyan-glow: rgba(77,232,240,0.5);
+    --amber: #ffa24c;
+    --amber-glow: rgba(255,162,76,0.5);
+    --violet: #b794ff;
+    --violet-glow: rgba(183,148,255,0.5);
     --green: #5dfca0;
+    --green-glow: rgba(93,252,160,0.45);
     --red: #ff5d6c;
-    --text-hi: #eaf6f8;
-    --text-lo: #6f95a0;
-    --line: rgba(77,232,240,0.18);
+    --text-hi: #e9f7f9;
+    --text-mid: #a9c6cd;
+    --text-lo: #5f8791;
+    --line: rgba(77,232,240,0.16);
+    --line-hi: rgba(77,232,240,0.38);
+    --mono: 'Share Tech Mono', ui-monospace, monospace;
+    --head: 'Orbitron', sans-serif;
+    --body: 'Rajdhani', sans-serif;
 
     /* cor viva do núcleo: muda com o estado da conversa */
     --core: var(--cyan);
     --core-glow: var(--cyan-glow);
     --nivel: 0;
+    --altura-topo: 76px;
   }
 
   *{ box-sizing:border-box; }
@@ -36,421 +45,438 @@
 
   html,body{
     margin:0; padding:0; min-height:100%;
-    background: radial-gradient(ellipse at 50% 30%, #0a1620 0%, var(--bg-void) 60%, #020407 100%);
     background-color: var(--bg-void);
+    background:
+      radial-gradient(1200px 700px at 50% 38%, rgba(20,60,78,0.55) 0%, transparent 60%),
+      radial-gradient(900px 600px at 85% 110%, rgba(255,162,76,0.06) 0%, transparent 60%),
+      linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-void) 100%);
     color: var(--text-hi);
-    font-family: 'Rajdhani', sans-serif;
+    font-family: var(--body);
     overflow-x:hidden;
   }
-
-  /* ambient scanlines + grid */
   body::before{
-    content:"";
-    position:fixed; inset:0;
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
     background-image:
       linear-gradient(var(--line) 1px, transparent 1px),
       linear-gradient(90deg, var(--line) 1px, transparent 1px);
-    background-size: 42px 42px;
-    opacity:0.35;
-    pointer-events:none;
-    mask-image: radial-gradient(ellipse at 50% 40%, black 0%, transparent 72%);
-    z-index:0;
+    background-size: 56px 56px;
+    opacity:0.28;
+    mask-image: radial-gradient(ellipse at 50% 42%, black 0%, transparent 70%);
   }
   body::after{
-    content:"";
-    position:fixed; inset:0;
-    background: repeating-linear-gradient(
-      to bottom, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
-      transparent 1px, transparent 3px
-    );
-    pointer-events:none;
-    z-index:2;
-    opacity:0.5;
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:60;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.022) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
   }
 
   body[data-estado="falando"]{ --core: var(--amber); --core-glow: var(--amber-glow); }
   body[data-estado="ferramenta"]{ --core: var(--violet); --core-glow: var(--violet-glow); }
-  body[data-estado="offline"]{ --core: var(--cyan-dim); --core-glow: rgba(77,232,240,0.18); }
+  body[data-estado="offline"]{ --core: #2b8790; --core-glow: rgba(77,232,240,0.22); }
 
-  .frame{
-    position:relative;
-    min-height:100vh;
-    display:flex;
-    flex-direction:column;
-    z-index:1;
+  #particulas{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.7; }
+
+  .app{ position:relative; z-index:1; min-height:100vh; display:flex; flex-direction:column; }
+
+  /* ---------- topo ---------- */
+  .topo{
+    height:var(--altura-topo);
+    display:grid; grid-template-columns: auto 1fr auto; align-items:center; gap:24px;
+    padding: 0 28px;
+    border-bottom:1px solid var(--line);
+    background: linear-gradient(180deg, rgba(6,16,25,0.85), rgba(6,16,25,0.4));
+    backdrop-filter: blur(8px);
+    position:sticky; top:0; z-index:20;
   }
-
-  /* corner brackets, targeting-reticle style */
-  .corner{
-    position:fixed; width:34px; height:34px; z-index:3;
-    border-color: var(--cyan); opacity:0.7; pointer-events:none;
+  .marca{ display:flex; align-items:center; gap:14px; }
+  .marca-icone{ width:38px; height:38px; }
+  .marca h1{
+    margin:0; font-family:var(--head); font-weight:900; font-size:22px; letter-spacing:5px;
+    text-shadow:0 0 16px var(--cyan-glow);
   }
-  .corner.tl{ top:18px; left:18px; border-top:2px solid; border-left:2px solid; }
-  .corner.tr{ top:18px; right:18px; border-top:2px solid; border-right:2px solid; }
-  .corner.bl{ bottom:18px; left:18px; border-bottom:2px solid; border-left:2px solid; }
-  .corner.br{ bottom:18px; right:18px; border-bottom:2px solid; border-right:2px solid; }
+  .marca h1 span{ color:var(--cyan); }
+  .marca small{ display:block; font-family:var(--mono); font-size:10px; letter-spacing:2px; color:var(--text-lo); margin-top:2px; }
 
-  header{
-    display:flex; justify-content:space-between; align-items:flex-start; gap:24px;
-    padding: 30px 48px 0 48px;
-  }
-
-  .brand{ display:flex; flex-direction:column; gap:4px; }
-  .brand .eyebrow{
-    font-family:'Orbitron', sans-serif;
-    font-size:11px; letter-spacing:5px; color:var(--cyan);
-    opacity:0.85;
-  }
-  .brand h1{
-    font-family:'Orbitron', sans-serif;
-    font-weight:900;
-    font-size:clamp(28px,4vw,44px);
-    margin:2px 0 0 0;
-    letter-spacing:4px;
-    color:var(--text-hi);
-    text-shadow: 0 0 18px var(--cyan-glow);
-  }
-  .brand h1 span{ color:var(--cyan); }
-
-  .header-dir{ display:flex; align-items:flex-start; gap:18px; }
-
-  .statusblock{
-    text-align:right;
+  .telemetria{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+  .chip{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:11px; letter-spacing:1.5px; color:var(--text-mid);
+    padding:6px 11px; border:1px solid var(--line); border-radius:3px;
+    background: rgba(9,22,32,0.55);
     white-space:nowrap;
-    font-size:13px;
-    color:var(--text-lo);
-    letter-spacing:1px;
-    line-height:1.7;
   }
-  .statusblock b{ color:var(--text-hi); font-weight:600; }
-  .dot{
-    display:inline-block; width:7px; height:7px; border-radius:50%;
-    background:var(--cyan); box-shadow:0 0 8px var(--cyan-glow);
-    margin-right:6px; vertical-align:1px;
-    animation: blink 2.4s ease-in-out infinite;
-  }
-  .dot.off{ background:var(--red); box-shadow:0 0 8px rgba(255,93,108,0.6); }
-  .dot.wait{ background:var(--amber); box-shadow:0 0 8px var(--amber-glow); }
-  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  .chip b{ color:var(--text-hi); font-weight:400; }
+  .led{ width:7px; height:7px; border-radius:50%; background:var(--text-lo); flex-shrink:0; }
+  .led.ok{ background:var(--green); box-shadow:0 0 8px var(--green-glow); }
+  .led.on{ background:var(--cyan); box-shadow:0 0 8px var(--cyan-glow); animation:pisca 2.2s ease-in-out infinite; }
+  .led.wait{ background:var(--amber); box-shadow:0 0 8px var(--amber-glow); animation:pisca 1s ease-in-out infinite; }
+  .led.off{ background:var(--red); box-shadow:0 0 8px rgba(255,93,108,0.55); }
+  @keyframes pisca{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+  .topo-dir{ display:flex; align-items:center; gap:14px; }
+  .relogio{ text-align:right; line-height:1.1; }
+  .relogio .hora{ font-family:var(--mono); font-size:24px; letter-spacing:2px; color:var(--text-hi); }
+  .relogio .data{ font-family:var(--mono); font-size:10px; letter-spacing:2px; color:var(--text-lo); text-transform:uppercase; }
+  .clima-chip{ display:flex; align-items:center; gap:8px; }
+  .clima-chip svg{ width:22px; height:22px; color:var(--cyan); }
+  .clima-chip .temp{ font-family:var(--mono); font-size:20px; color:var(--text-hi); }
+  .clima-chip .desc{ font-family:var(--mono); font-size:10px; letter-spacing:1.5px; color:var(--text-lo); text-transform:uppercase; max-width:120px; line-height:1.2; }
 
   .icon-btn{
-    width:40px; height:40px; border-radius:10px;
+    width:40px; height:40px; border-radius:4px;
     display:inline-flex; align-items:center; justify-content:center;
-    background:transparent; color:var(--cyan);
+    background:rgba(9,22,32,0.6); color:var(--cyan);
     border:1px solid var(--line); cursor:pointer;
-    transition: background .2s, border-color .2s, box-shadow .2s;
+    transition: background .2s, border-color .2s, box-shadow .2s, color .2s;
   }
-  .icon-btn:hover{ background:rgba(77,232,240,0.08); border-color:var(--cyan-dim); }
-  .icon-btn:focus-visible, button:focus-visible, input:focus-visible{
-    outline:2px solid var(--cyan); outline-offset:2px;
-  }
-  .icon-btn svg{ width:20px; height:20px; }
-  .icon-btn[aria-pressed="true"]{ background:rgba(77,232,240,0.14); border-color:var(--cyan); box-shadow:0 0 14px var(--cyan-glow) inset; }
-  .icon-btn.alerta[aria-pressed="true"]{ color:var(--red); border-color:var(--red); background:rgba(255,93,108,0.1); box-shadow:none; }
+  .icon-btn:hover{ border-color:var(--line-hi); background:rgba(77,232,240,0.08); }
+  .icon-btn svg{ width:19px; height:19px; }
+  .icon-btn[aria-pressed="true"]{ border-color:var(--cyan); box-shadow:0 0 16px var(--cyan-glow) inset; }
+  .icon-btn.alerta[aria-pressed="true"]{ color:var(--red); border-color:var(--red); box-shadow:none; background:rgba(255,93,108,0.1); }
+  .icon-btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  :focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
 
+  /* ---------- grade principal ---------- */
   main{
     flex:1;
     display:grid;
-    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(280px, 340px);
-    gap:24px;
-    padding: 28px 48px 40px 48px;
-    align-items:start;
+    grid-template-columns: minmax(280px, 330px) minmax(0, 1fr) minmax(290px, 350px);
+    gap:22px;
+    padding: 22px 28px 26px 28px;
+    height: calc(100vh - var(--altura-topo));
   }
-  .col{ display:flex; flex-direction:column; gap:18px; min-width:0; }
-  .col-centro{ align-items:center; gap:22px; }
+  .col{ display:flex; flex-direction:column; gap:16px; min-width:0; overflow-y:auto; padding:4px 6px 12px 4px; }
+  .col::-webkit-scrollbar{ width:5px; }
+  .col::-webkit-scrollbar-thumb{ background:var(--cyan-dim); border-radius:4px; }
+  .col-centro{ align-items:center; overflow:visible; }
 
-  /* ---------- painéis ---------- */
+  /* ---------- painel HUD ---------- */
   .painel{
-    width:100%;
-    background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
+    position:relative; width:100%;
+    background: linear-gradient(160deg, var(--glass-hi) 0%, var(--glass) 55%);
     border:1px solid var(--line);
-    border-radius:14px;
-    padding:18px 18px 16px 18px;
-    position:relative;
-    box-shadow: 0 0 0 1px rgba(77,232,240,0.05), 0 20px 60px -20px rgba(0,0,0,0.7);
+    border-radius:4px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 18px 50px -24px rgba(0,0,0,0.9), inset 0 1px 0 rgba(143,243,247,0.06);
+    animation: entrar .6s ease both;
   }
-  .painel h2{
-    position:absolute; top:-10px; left:16px; margin:0;
-    background:var(--bg-void); padding:0 8px;
-    font-family:'Orbitron', sans-serif; font-size:10px; font-weight:700; letter-spacing:4px;
-    color:var(--amber);
+  .painel::before, .painel::after{
+    content:""; position:absolute; width:14px; height:14px; pointer-events:none;
+    border-color: var(--cyan); opacity:0.85;
   }
-  .painel h2 .contador{ color:var(--text-lo); letter-spacing:2px; margin-left:6px; }
-  .vazio{ color:var(--text-lo); font-size:14px; margin:4px 0 0 0; }
+  .painel::before{ top:-1px; left:-1px; border-top:2px solid; border-left:2px solid; }
+  .painel::after{ bottom:-1px; right:-1px; border-bottom:2px solid; border-right:2px solid; }
+  @keyframes entrar{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
 
-  .lista{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-  .lista li{
-    display:flex; gap:10px; align-items:baseline;
-    font-size:15px; line-height:1.35;
-    padding-bottom:8px; border-bottom:1px solid rgba(77,232,240,0.08);
+  .painel-cab{
+    display:flex; align-items:center; gap:10px;
+    padding:11px 14px 9px 14px;
+    border-bottom:1px solid var(--line);
   }
-  .lista li:last-child{ border-bottom:none; padding-bottom:0; }
-  .lista .hora{
-    font-family:'Orbitron', sans-serif; font-size:11px; letter-spacing:1px;
-    color:var(--cyan); min-width:44px; flex-shrink:0;
-  }
+  .painel-cab .codigo{ font-family:var(--mono); font-size:10px; color:var(--cyan); opacity:0.75; letter-spacing:1px; }
+  .painel-cab h2{ margin:0; font-family:var(--head); font-size:11px; font-weight:700; letter-spacing:3.5px; color:var(--text-hi); }
+  .painel-cab .extra{ margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--text-lo); letter-spacing:1px; }
+  .painel-corpo{ padding:12px 14px 14px 14px; }
+  .vazio{ color:var(--text-lo); font-size:14px; margin:2px 0 0 0; line-height:1.4; }
+
+  .lista{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:9px; }
+  .lista li{ display:flex; gap:10px; align-items:baseline; font-size:15px; line-height:1.35; }
+  .lista .hora{ font-family:var(--mono); font-size:12px; color:var(--cyan); min-width:44px; flex-shrink:0; }
   .lista .texto{ flex:1; min-width:0; overflow-wrap:anywhere; }
   .lista .sub{ display:block; color:var(--text-lo); font-size:13px; }
+  .lista li.passado{ opacity:0.45; }
 
-  .chip{
-    flex-shrink:0;
-    font-size:10px; letter-spacing:1.5px; text-transform:uppercase;
-    padding:2px 7px; border-radius:20px;
-    border:1px solid var(--cyan-dim); color:var(--cyan);
+  .tag{
+    flex-shrink:0; font-family:var(--mono); font-size:10px; letter-spacing:1px; text-transform:uppercase;
+    padding:1px 7px; border:1px solid var(--cyan-dim); border-radius:2px; color:var(--cyan);
   }
-  .chip.alta, .chip.atrasada{ border-color:var(--red); color:var(--red); }
-  .chip.hoje{ border-color:var(--amber); color:var(--amber); }
+  .tag.alta, .tag.atrasada{ border-color:var(--red); color:var(--red); }
+  .tag.hoje{ border-color:var(--amber); color:var(--amber); }
+  .tag.ok{ border-color:var(--green); color:var(--green); }
 
-  .perfil-texto{ white-space:pre-wrap; font-size:15px; line-height:1.45; margin:0; color:var(--text-hi); }
+  .perfil-texto{ white-space:pre-wrap; font-size:15px; line-height:1.45; margin:0; color:var(--text-mid); }
+  .rolagem{ max-height:250px; overflow-y:auto; padding-right:4px; }
+  .rolagem::-webkit-scrollbar{ width:4px; }
+  .rolagem::-webkit-scrollbar-thumb{ background:var(--cyan-dim); border-radius:4px; }
 
-  .rolagem{ max-height:280px; overflow-y:auto; padding-right:4px; }
-  .rolagem::-webkit-scrollbar{ width:6px; }
-  .rolagem::-webkit-scrollbar-thumb{ background:var(--cyan-dim); border-radius:6px; }
-
-  /* ---------- núcleo ---------- */
-  .core-wrap{
-    position:relative;
-    width:min(70vw, 400px);
-    aspect-ratio:1/1;
-    display:flex; align-items:center; justify-content:center;
-    margin-top:6px;
+  /* ---------- identidade (scanner biométrico) ---------- */
+  .scanner{
+    position:relative; aspect-ratio:4/3; border-radius:3px; overflow:hidden;
+    background: radial-gradient(circle at 50% 45%, #0b1c26 0%, #02060a 75%);
+    border:1px solid var(--line);
   }
-  .core-wrap canvas{ position:absolute; inset:-6%; width:112%; height:112%; pointer-events:none; }
+  .scanner video, .scanner canvas{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1);
+  }
+  .scanner video{ filter: saturate(0.75) contrast(1.05) brightness(0.95); }
+  .scanner .grade-scan{
+    position:absolute; inset:0; pointer-events:none;
+    background:
+      linear-gradient(rgba(77,232,240,0.06) 1px, transparent 1px) 0 0 / 100% 22px,
+      linear-gradient(90deg, rgba(77,232,240,0.06) 1px, transparent 1px) 0 0 / 22px 100%;
+  }
+  .scanner .linha-scan{
+    position:absolute; left:0; right:0; height:2px; top:0; pointer-events:none;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    box-shadow: 0 0 14px var(--cyan-glow);
+    animation: varrer 2.6s linear infinite;
+    opacity:0.8;
+  }
+  @keyframes varrer{ 0%{ top:0; } 100%{ top:100%; } }
+  .scanner .mira{ position:absolute; inset:10px; pointer-events:none;
+    background:
+      linear-gradient(var(--cyan), var(--cyan)) top left / 18px 2px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) top left / 2px 18px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) top right / 18px 2px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) top right / 2px 18px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) bottom left / 18px 2px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) bottom left / 2px 18px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) bottom right / 18px 2px no-repeat,
+      linear-gradient(var(--cyan), var(--cyan)) bottom right / 2px 18px no-repeat;
+    opacity:0.7;
+  }
+  .scanner .aviso{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    text-align:center; padding:0 20px; color:var(--text-lo); font-family:var(--mono); font-size:11px; letter-spacing:1.5px;
+  }
+  .scanner .aviso svg{ width:34px; height:34px; color:var(--cyan-dim); }
+  .scanner.confirmado{ border-color:var(--green); box-shadow:0 0 22px var(--green-glow) inset; }
 
-  .ring{
-    position:absolute;
-    border-radius:50%;
-    border:1px solid var(--cyan-dim);
-    transition: border-color .4s;
-  }
-  .ring.r1{ inset:0; animation: spin 26s linear infinite; border-style:dashed; opacity:0.55;}
-  .ring.r2{ inset:9%; animation: spin 18s linear infinite reverse; opacity:0.75;}
-  .ring.r3{
-    inset:19%; border:1px solid var(--core); opacity:0.9;
-    box-shadow:0 0 24px var(--core-glow) inset;
-    transition: border-color .4s, box-shadow .4s;
-  }
-  @keyframes spin{ to{ transform:rotate(360deg);} }
-  body[data-estado="ferramenta"] .ring.r1{ animation-duration:4s; }
-  body[data-estado="ferramenta"] .ring.r2{ animation-duration:3s; }
-  body[data-estado="conectando"] .ring.r2{ animation-duration:2.4s; }
+  .ficha{ display:grid; grid-template-columns: auto 1fr; gap:4px 12px; margin:12px 0 0 0; font-family:var(--mono); font-size:12px; }
+  .ficha dt{ color:var(--text-lo); letter-spacing:1.5px; }
+  .ficha dd{ margin:0; color:var(--text-hi); text-align:right; overflow-wrap:anywhere; }
+  .ficha dd.ok{ color:var(--green); }
+  .ficha dd.alerta{ color:var(--amber); }
+  .barra-conf{ grid-column:1 / -1; height:4px; background:rgba(77,232,240,0.1); border-radius:2px; overflow:hidden; margin-top:2px; }
+  .barra-conf i{ display:block; height:100%; width:0; background:linear-gradient(90deg, var(--cyan), var(--green)); transition:width .4s; }
 
-  .ring.r2::before, .ring.r1::before{
-    content:""; position:absolute; width:6px; height:6px; border-radius:50%;
-    background:var(--core); box-shadow:0 0 10px 3px var(--core-glow);
-    top:-3px; left:50%;
+  .acoes{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .btn-sec{
+    flex:1; min-width:110px;
+    font-family:var(--head); font-size:9.5px; letter-spacing:2px; font-weight:700;
+    background:rgba(9,22,32,0.6); color:var(--cyan); border:1px solid var(--line);
+    border-radius:3px; padding:9px 10px; cursor:pointer; text-align:center; text-decoration:none;
+    display:inline-flex; align-items:center; justify-content:center;
+    transition: border-color .2s, background .2s;
   }
+  .btn-sec:hover{ border-color:var(--line-hi); background:rgba(77,232,240,0.07); }
+  .btn-sec:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn-sec.perigo{ color:var(--red); border-color:rgba(255,93,108,0.35); }
+  .descricao-visao{ font-size:14px; line-height:1.4; color:var(--text-mid); margin:10px 0 0 0; }
 
-  .core-center{
-    position:absolute; inset:29%;
-    border-radius:50%;
-    background: radial-gradient(circle at 50% 45%, #fff6ec 0%, var(--core) 28%, #0c3a40 72%, transparent 100%);
-    box-shadow: 0 0 calc(60px + var(--nivel) * 70px) calc(14px + var(--nivel) * 22px) var(--core-glow), 0 0 140px 40px rgba(77,232,240,0.12);
-    transform: scale(calc(1 + var(--nivel) * 0.12));
-    transition: background .4s;
+  /* ---------- reator ---------- */
+  .reator{ position:relative; width:min(46vh, 430px, 80vw); aspect-ratio:1/1; margin-top:4px; }
+  .reator svg, .reator canvas{ position:absolute; inset:0; width:100%; height:100%; }
+  .reator .gira{ transform-origin:200px 200px; transform-box:view-box; }
+  .reator .g1{ animation: girar 40s linear infinite; }
+  .reator .g2{ animation: girar 26s linear infinite reverse; }
+  .reator .g3{ animation: girar 12s linear infinite; }
+  .reator .g4{ animation: girar 7s linear infinite reverse; }
+  body[data-estado="ferramenta"] .reator .g3{ animation-duration:2.5s; }
+  body[data-estado="ferramenta"] .reator .g4{ animation-duration:1.6s; }
+  body[data-estado="conectando"] .reator .g2{ animation-duration:3s; }
+  @keyframes girar{ to{ transform: rotate(360deg); } }
+  .reator .traco{ stroke: var(--core); transition: stroke .5s; }
+  .reator .traco-dim{ stroke: var(--cyan-dim); }
+  .reator .nucleo{
+    position:absolute; inset:34%; border-radius:50%;
+    background: radial-gradient(circle at 50% 46%, #fffaf2 0%, var(--core) 30%, rgba(8,48,56,0.9) 72%, transparent 100%);
+    box-shadow: 0 0 calc(50px + var(--nivel) * 80px) calc(10px + var(--nivel) * 26px) var(--core-glow), 0 0 160px 40px rgba(77,232,240,0.1);
+    transform: scale(calc(1 + var(--nivel) * 0.14));
+    transition: background .5s;
   }
-  body[data-estado="offline"] .core-center{ animation: pulse 3.4s ease-in-out infinite; filter:saturate(0.6) brightness(0.8); }
-  body[data-estado="conectando"] .core-center{ animation: pulse 1.1s ease-in-out infinite; }
-  @keyframes pulse{
-    0%,100%{ transform:scale(1); filter:brightness(1); }
-    50%{ transform:scale(1.045); filter:brightness(1.18); }
-  }
+  body[data-estado="offline"] .reator .nucleo{ animation: pulsar 3.6s ease-in-out infinite; filter: saturate(0.6) brightness(0.85); }
+  body[data-estado="conectando"] .reator .nucleo{ animation: pulsar 1s ease-in-out infinite; }
+  @keyframes pulsar{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.05); filter:brightness(1.2); } }
 
-  .core-label{
-    position:absolute; bottom:-40px; left:50%; transform:translateX(-50%);
-    font-family:'Orbitron', sans-serif;
-    font-size:12px; letter-spacing:6px; color:var(--core);
-    white-space:nowrap;
-    transition: color .4s;
-  }
+  .estado-reator{ text-align:center; margin-top:6px; }
+  .estado-reator .rotulo{ font-family:var(--head); font-size:13px; letter-spacing:8px; color:var(--core); transition: color .5s; text-shadow:0 0 12px var(--core-glow); }
+  .estado-reator .sub{ font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--text-lo); margin-top:6px; min-height:1.2em; }
 
-  .controles{ display:flex; align-items:center; gap:18px; margin-top:30px; }
+  .doca{ display:flex; align-items:center; gap:16px; margin-top:18px; }
   .btn-ligar{
-    font-family:'Orbitron', sans-serif; font-weight:700; font-size:13px; letter-spacing:4px;
-    color:var(--bg-void); background:var(--cyan);
-    border:none; border-radius:40px; padding:14px 30px; cursor:pointer;
-    box-shadow:0 0 22px var(--cyan-glow);
-    transition: transform .15s, box-shadow .2s, background .2s;
-    min-width:190px;
+    position:relative;
+    font-family:var(--head); font-weight:700; font-size:12.5px; letter-spacing:5px;
+    color:var(--bg-void); background: linear-gradient(180deg, var(--cyan-soft), var(--cyan));
+    border:none; border-radius:3px; padding:15px 34px; cursor:pointer; min-width:210px;
+    box-shadow:0 0 26px var(--cyan-glow), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: transform .15s, box-shadow .2s;
   }
-  .btn-ligar:hover{ transform:translateY(-1px); box-shadow:0 0 32px var(--cyan-glow); }
-  .btn-ligar.ativo{ background:transparent; color:var(--red); border:1px solid var(--red); box-shadow:0 0 18px rgba(255,93,108,0.35); }
+  .btn-ligar:hover{ transform:translateY(-1px); box-shadow:0 0 36px var(--cyan-glow); }
+  .btn-ligar.ativo{ background:transparent; color:var(--red); border:1px solid var(--red); box-shadow:0 0 20px rgba(255,93,108,0.3); }
+  .btn-ligar.chamando{ animation: chamar 1.6s ease-in-out infinite; }
+  @keyframes chamar{ 0%,100%{ box-shadow:0 0 20px var(--cyan-glow); } 50%{ box-shadow:0 0 44px 6px var(--green-glow); } }
   .btn-ligar:disabled{ opacity:0.6; cursor:wait; }
 
-  .comando{
-    width:min(100%, 560px);
-    display:flex; gap:10px;
-  }
+  .comando{ width:min(100%, 600px); display:flex; gap:10px; margin-top:16px; }
   .comando input{
     flex:1; min-width:0;
-    background:rgba(11,20,28,0.85); color:var(--text-hi);
-    border:1px solid var(--line); border-radius:10px;
-    font-family:'Rajdhani', sans-serif; font-size:16px; letter-spacing:0.5px;
-    padding:11px 14px;
+    background:rgba(6,16,25,0.75); color:var(--text-hi);
+    border:1px solid var(--line); border-radius:3px;
+    font-family:var(--body); font-size:16px; padding:11px 14px;
   }
   .comando input::placeholder{ color:var(--text-lo); }
 
-  /* transcrição */
-  .console{ width:min(100%, 560px); }
-  .console h2{ left:20px; }
-  .falas{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; max-height:300px; overflow-y:auto; scroll-behavior:smooth; }
-  .falas li{ font-size:16px; line-height:1.4; display:flex; gap:10px; }
-  .falas .quem{
-    flex-shrink:0; width:62px;
-    font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:2px; padding-top:4px;
-  }
+  .comms{ width:min(100%, 600px); margin-top:16px; }
+  .falas{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; max-height:240px; overflow-y:auto; }
+  .falas li{ display:flex; gap:12px; font-size:16px; line-height:1.4; animation: entrar .3s ease both; }
+  .falas .quem{ flex-shrink:0; width:64px; font-family:var(--mono); font-size:11px; letter-spacing:1.5px; padding-top:3px; }
   .falas li.renato .quem{ color:var(--text-lo); }
   .falas li.jarvis .quem{ color:var(--cyan); }
-  .falas li.ferramenta{ font-size:13px; color:var(--violet); letter-spacing:0.5px; }
+  .falas li.ferramenta{ font-size:13px; color:var(--violet); font-family:var(--mono); }
   .falas li.ferramenta .quem{ color:var(--violet); }
+  .falas li.sistema{ font-size:13px; color:var(--green); font-family:var(--mono); }
+  .falas li.sistema .quem{ color:var(--green); }
 
-  /* visão */
-  .visao-tela{
-    position:relative; aspect-ratio:4/3; border-radius:10px; overflow:hidden;
-    background:#03070a; border:1px solid var(--line);
-    display:flex; align-items:center; justify-content:center;
-  }
-  .visao-tela video, .visao-tela img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .visao-tela video{ transform:scaleX(-1); }
-  .visao-tela .aviso{ position:absolute; color:var(--text-lo); font-size:13px; letter-spacing:1px; text-align:center; padding:0 18px; }
-  .visao-tela::after{
-    content:""; position:absolute; inset:0; pointer-events:none;
-    background:
-      linear-gradient(var(--cyan), var(--cyan)) top left / 16px 1px no-repeat,
-      linear-gradient(var(--cyan), var(--cyan)) top left / 1px 16px no-repeat,
-      linear-gradient(var(--cyan), var(--cyan)) bottom right / 16px 1px no-repeat,
-      linear-gradient(var(--cyan), var(--cyan)) bottom right / 1px 16px no-repeat;
-    opacity:0.8;
-  }
-  .visao-tela.escaneando::before{
-    content:""; position:absolute; left:0; right:0; height:30%; z-index:1;
-    background:linear-gradient(180deg, transparent, rgba(77,232,240,0.35), transparent);
-    animation: scan 1.2s linear infinite;
-  }
-  @keyframes scan{ from{ top:-30%; } to{ top:100%; } }
-  .visao-descricao{ font-size:14px; line-height:1.4; color:var(--text-hi); margin:10px 0 0 0; min-height:1.4em; }
-  .visao-acoes{ display:flex; gap:8px; margin-top:10px; }
-  .btn-sec{
-    flex:1;
-    font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:2px;
-    background:transparent; color:var(--cyan); border:1px solid var(--line);
-    border-radius:8px; padding:9px 10px; cursor:pointer;
-  }
-  .btn-sec:hover{ border-color:var(--cyan-dim); background:rgba(77,232,240,0.06); }
-  .btn-sec:disabled{ opacity:0.45; cursor:not-allowed; }
-  a.btn-sec{ display:inline-flex; align-items:center; justify-content:center; text-align:center; text-decoration:none; }
+  /* ---------- hábitos / finanças ---------- */
+  .habito{ display:grid; grid-template-columns: 1fr auto; gap:4px 10px; align-items:center; }
+  .habito + .habito{ margin-top:11px; }
+  .habito .nome{ font-size:15px; text-transform:capitalize; }
+  .habito .num{ font-family:var(--mono); font-size:12px; color:var(--text-mid); }
+  .habito .barra{ grid-column:1 / -1; height:5px; background:rgba(77,232,240,0.1); border-radius:3px; overflow:hidden; }
+  .habito .barra i{ display:block; height:100%; background:linear-gradient(90deg, var(--cyan-dim), var(--cyan)); border-radius:3px; transition:width .6s; }
+  .habito.completo .barra i{ background:linear-gradient(90deg, #1f8f62, var(--green)); }
+  .habito .seq{ grid-column:1 / -1; font-family:var(--mono); font-size:10px; color:var(--amber); letter-spacing:1px; }
 
-  /* spotify */
-  .spotify-nome{ font-size:18px; font-weight:600; margin:2px 0 2px 0; overflow-wrap:anywhere; }
+  .valor-grande{ font-family:var(--mono); font-size:30px; color:var(--text-hi); letter-spacing:1px; line-height:1; }
+  .valor-sub{ font-family:var(--mono); font-size:11px; color:var(--text-lo); letter-spacing:1px; margin-top:6px; }
+  .categorias{ margin-top:12px; display:flex; flex-direction:column; gap:7px; }
+  .categoria{ display:grid; grid-template-columns: 90px 1fr auto; gap:8px; align-items:center; font-size:13px; }
+  .categoria .nome{ text-transform:capitalize; color:var(--text-mid); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .categoria .trilho{ height:4px; background:rgba(255,162,76,0.12); border-radius:2px; overflow:hidden; }
+  .categoria .trilho i{ display:block; height:100%; background:var(--amber); }
+  .categoria .valor{ font-family:var(--mono); font-size:11px; color:var(--text-mid); }
+
+  .spotify-nome{ font-size:18px; font-weight:600; margin:0 0 3px 0; overflow-wrap:anywhere; }
   .spotify-detalhe{ font-size:14px; color:var(--text-lo); margin:0; line-height:1.4; }
   #painel-spotify.alerta .spotify-detalhe{ color:var(--amber); }
 
-  /* atividade */
   .atividade li{ font-size:13px; }
-  .atividade .hora{ min-width:40px; color:var(--text-lo); font-size:10px; }
+  .atividade .hora{ color:var(--text-lo); font-size:10px; min-width:40px; }
   .atividade li.ok .texto{ color:var(--green); }
   .atividade li.erro .texto{ color:var(--red); }
   .atividade li.ferramenta .texto{ color:var(--violet); }
 
-  footer{
-    text-align:center;
-    padding-bottom:22px;
-    font-size:11px;
-    letter-spacing:3px;
-    color:var(--text-lo);
-    opacity:0.6;
+  /* ---------- avisos (toast) ---------- */
+  .avisos{ position:fixed; top:calc(var(--altura-topo) + 14px); left:50%; transform:translateX(-50%); z-index:40; display:flex; flex-direction:column; gap:10px; align-items:center; pointer-events:none; }
+  .aviso-toast{
+    min-width:300px; max-width:min(92vw, 520px);
+    background:rgba(6,20,26,0.92); border:1px solid var(--green); border-radius:3px;
+    box-shadow:0 0 30px var(--green-glow); padding:12px 18px; text-align:center;
+    animation: toast 4.5s ease both;
   }
+  .aviso-toast .t1{ font-family:var(--head); font-size:11px; letter-spacing:4px; color:var(--green); }
+  .aviso-toast .t2{ font-size:17px; margin-top:4px; }
+  @keyframes toast{ 0%{ opacity:0; transform:translateY(-10px); } 8%,85%{ opacity:1; transform:none; } 100%{ opacity:0; } }
+
+  /* ---------- inicialização ---------- */
+  .boot{
+    position:fixed; inset:0; z-index:80; background:var(--bg-void);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition: opacity .6s;
+  }
+  .boot.saindo{ opacity:0; pointer-events:none; }
+  .boot pre{ font-family:var(--mono); font-size:13px; line-height:1.9; color:var(--cyan); letter-spacing:1.5px; margin:0; min-width:min(90vw, 420px); }
+  .boot pre .ok{ color:var(--green); }
 
   /* ---------- diálogos ---------- */
   dialog{
-    width:min(92vw, 460px);
-    background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
+    width:min(92vw, 470px);
+    background: linear-gradient(160deg, #0d212d, #08151e);
     color:var(--text-hi);
-    border:1px solid var(--cyan-dim); border-radius:14px;
-    padding:26px 24px 22px 24px;
-    box-shadow:0 0 40px rgba(77,232,240,0.15);
+    border:1px solid var(--line-hi); border-radius:4px;
+    padding:24px;
+    box-shadow:0 0 50px rgba(77,232,240,0.15);
   }
-  dialog::backdrop{ background:rgba(2,4,7,0.75); backdrop-filter:blur(3px); }
-  dialog h3{
-    margin:0 0 6px 0;
-    font-family:'Orbitron', sans-serif; font-size:14px; letter-spacing:4px; color:var(--cyan);
+  dialog::backdrop{ background:rgba(2,4,7,0.78); backdrop-filter:blur(4px); }
+  dialog h3{ margin:0 0 6px 0; font-family:var(--head); font-size:13px; letter-spacing:4px; color:var(--cyan); }
+  dialog p{ margin:0 0 14px 0; color:var(--text-lo); font-size:14px; line-height:1.45; }
+  dialog label{ display:block; font-family:var(--mono); font-size:11px; letter-spacing:1.5px; color:var(--text-lo); margin:12px 0 6px 0; text-transform:uppercase; }
+  dialog input[type="text"], dialog input[type="url"], dialog input[type="password"]{
+    width:100%; background:rgba(3,7,11,0.8); color:var(--text-hi);
+    border:1px solid var(--line); border-radius:3px; font-family:var(--body); font-size:15px; padding:10px 12px;
   }
-  dialog p{ margin:0 0 16px 0; color:var(--text-lo); font-size:14px; line-height:1.45; }
-  dialog label{ display:block; font-size:12px; letter-spacing:2px; color:var(--text-lo); margin:12px 0 6px 0; text-transform:uppercase; }
-  dialog input{
-    width:100%;
-    background:rgba(5,10,15,0.8); color:var(--text-hi);
-    border:1px solid var(--line); border-radius:8px;
-    font-family:'Rajdhani', sans-serif; font-size:15px;
-    padding:10px 12px;
-  }
+  dialog .linha-check{ display:flex; gap:10px; align-items:center; text-transform:none; letter-spacing:0.5px; font-family:var(--body); font-size:14px; color:var(--text-mid); }
   .dialog-acoes{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
-  .dialog-acoes .btn-sec{ flex:0 0 auto; padding:10px 16px; }
-  .dialog-acoes .btn-pri{
-    font-family:'Orbitron', sans-serif; font-size:10px; letter-spacing:2px; font-weight:700;
-    background:var(--cyan); color:var(--bg-void); border:none; border-radius:8px; padding:10px 18px; cursor:pointer;
-  }
+  .dialog-acoes .btn-sec{ flex:0 0 auto; min-width:0; padding:10px 16px; }
+  .btn-pri{ font-family:var(--head); font-size:9.5px; letter-spacing:2px; font-weight:700; background:var(--cyan); color:var(--bg-void); border:none; border-radius:3px; padding:10px 18px; cursor:pointer; }
   .resultado-teste{ font-size:13px; margin-top:12px; min-height:1.2em; }
   .resultado-teste.ok{ color:var(--green); }
   .resultado-teste.erro{ color:var(--red); }
-
   .aprovacao dl{ margin:0; display:grid; grid-template-columns:auto 1fr; gap:6px 12px; font-size:14px; }
-  .aprovacao dt{ color:var(--text-lo); text-transform:uppercase; font-size:11px; letter-spacing:1.5px; padding-top:2px; }
+  .aprovacao dt{ color:var(--text-lo); text-transform:uppercase; font-family:var(--mono); font-size:11px; padding-top:2px; }
   .aprovacao dd{ margin:0; white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow-y:auto; }
-  .aprovacao .btn-recusar{ color:var(--red); border-color:rgba(255,93,108,0.5); }
 
   .sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 
   /* ---------- responsivo ---------- */
-  @media (max-width: 1180px){
-    main{ grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
+  @media (max-width: 1240px){
+    main{ grid-template-columns: minmax(0, 1fr) minmax(290px, 340px); height:auto; }
+    .col{ overflow:visible; }
     .col-centro{ grid-column:1; grid-row:1 / span 2; }
-    .col-dir{ grid-column:2; grid-row:1; }
-    .col-esq{ grid-column:2; grid-row:2; }
+    .col-esq{ grid-column:2; grid-row:1; }
+    .col-dir{ grid-column:2; grid-row:2; }
+    .topo{ grid-template-columns: auto 1fr; }
+    .telemetria{ display:none; }
   }
   @media (max-width: 820px){
-    header{ padding:22px 16px 0 16px; flex-wrap:wrap; gap:14px; }
-    .header-dir{ width:100%; justify-content:space-between; }
-    .statusblock{ text-align:left; }
-    main{ grid-template-columns: minmax(0, 1fr); padding:20px 16px 32px 16px; }
-    .col-centro, .col-dir, .col-esq{ grid-column:1; grid-row:auto; }
+    :root{ --altura-topo: 64px; }
+    .topo{ padding:0 14px; gap:10px; }
+    .marca small, .clima-chip .desc, .relogio .data{ display:none; }
+    .marca{ gap:8px; }
+    .marca-icone{ width:28px; height:28px; }
+    .marca h1{ font-size:15px; letter-spacing:2.5px; }
+    .topo-dir{ gap:8px; }
+    .clima-chip .temp{ font-size:15px; }
+    .clima-chip svg{ width:18px; height:18px; }
+    .relogio .hora{ font-size:15px; }
+    .icon-btn{ width:36px; height:36px; }
+    main{ grid-template-columns: minmax(0, 1fr); padding:16px; gap:16px; }
+    .col-centro, .col-esq, .col-dir{ grid-column:1; grid-row:auto; }
     .col-centro{ order:1; }
-    .col-dir{ order:2; }
-    .col-esq{ order:3; }
-    .corner{ display:none; }
-    .statusblock{ font-size:12px; }
-    .statusblock .operador{ display:none; }
-  }
-  @media (max-width: 480px){
-    .brand .eyebrow{ letter-spacing:3px; font-size:10px; }
-    .btn-ligar{ min-width:0; padding:13px 22px; }
-    .controles{ gap:12px; }
+    .col-esq{ order:2; }
+    .col-dir{ order:3; }
+    .btn-ligar{ min-width:0; padding:14px 24px; }
+    .reator{ width:min(78vw, 360px); }
   }
   @media (prefers-reduced-motion: reduce){
-    .ring, .core-center, .dot, .visao-tela.escaneando::before{ animation:none !important; }
+    .reator .gira, .reator .nucleo, .led, .linha-scan, .btn-ligar.chamando, .painel, .falas li{ animation:none !important; }
   }
 </style>
 </head>
 <body data-estado="offline">
 
-  <div class="corner tl"></div>
-  <div class="corner tr"></div>
-  <div class="corner bl"></div>
-  <div class="corner br"></div>
+  <div class="boot" id="boot" aria-hidden="true"><pre id="boot-texto"></pre></div>
+  <canvas id="particulas" aria-hidden="true"></canvas>
+  <div class="avisos" id="avisos" aria-live="polite"></div>
 
-  <div class="frame">
-    <header>
-      <div class="brand">
-        <div class="eyebrow">SISTEMA DE ASSISTÊNCIA PESSOAL</div>
-        <h1>J.<span>A.R.V.I.S.</span></h1>
-      </div>
-      <div class="header-dir">
-        <div class="statusblock">
-          <div><span class="dot off" id="dot-link"></span>LINK: <b id="status-link">OFFLINE</b></div>
-          <div><span class="dot wait" id="dot-n8n"></span>CÉREBRO: <b id="status-n8n">VERIFICANDO</b></div>
-          <div id="relogio">--:--:--</div>
-          <div class="operador">OPERADOR: RENATO</div>
+  <div class="app">
+    <header class="topo">
+      <div class="marca">
+        <svg class="marca-icone" viewBox="0 0 40 40" aria-hidden="true">
+          <circle cx="20" cy="20" r="17" fill="none" stroke="#4de8f0" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.7"/>
+          <circle cx="20" cy="20" r="11" fill="none" stroke="#4de8f0" stroke-width="1.6"/>
+          <circle cx="20" cy="20" r="5" fill="#8ff3f7"/>
+        </svg>
+        <div>
+          <h1>J.<span>A.R.V.I.S.</span></h1>
+          <small>SISTEMA DE ASSISTÊNCIA PESSOAL · v3</small>
         </div>
+      </div>
+
+      <div class="telemetria">
+        <span class="chip"><i class="led off" id="led-voz"></i>VOZ <b id="tel-voz">OFFLINE</b></span>
+        <span class="chip"><i class="led wait" id="led-cerebro"></i>CÉREBRO <b id="tel-cerebro">—</b></span>
+        <span class="chip"><i class="led" id="led-visao"></i>VISÃO <b id="tel-visao">DESLIGADA</b></span>
+        <span class="chip"><i class="led" id="led-pc"></i>PC <b id="tel-pc">—</b></span>
+      </div>
+
+      <div class="topo-dir">
+        <div class="clima-chip" id="clima-chip" hidden>
+          <span id="clima-icone"></span>
+          <span class="temp" id="clima-temp"></span>
+          <span class="desc" id="clima-desc"></span>
+        </div>
+        <div class="relogio"><div class="hora" id="relogio-hora">--:--</div><div class="data" id="relogio-data"></div></div>
         <button class="icon-btn" id="btn-config" type="button" aria-label="Configurações">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -458,104 +484,174 @@
     </header>
 
     <main>
+      <!-- esquerda: quem é você -->
       <aside class="col col-esq">
         <section class="painel">
-          <h2>PERFIL</h2>
-          <p class="perfil-texto" id="perfil">Conecte o cérebro para ver o que o Jarvis sabe sobre o senhor.</p>
-        </section>
-        <section class="painel">
-          <h2>MEMÓRIA <span class="contador" id="contador-memorias"></span></h2>
-          <div class="rolagem">
-            <ul class="lista" id="lista-memorias"></ul>
+          <header class="painel-cab"><span class="codigo">ID.01</span><h2>IDENTIDADE</h2><span class="extra" id="id-estado-curto">OFFLINE</span></header>
+          <div class="painel-corpo">
+            <div class="scanner" id="scanner">
+              <video id="video" autoplay playsinline muted hidden></video>
+              <canvas id="overlay" aria-hidden="true"></canvas>
+              <div class="grade-scan"></div>
+              <div class="mira"></div>
+              <div class="linha-scan" id="linha-scan" hidden></div>
+              <div class="aviso" id="aviso-camera">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="9" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+                <span>SENSOR ÓPTICO DESLIGADO</span>
+              </div>
+            </div>
+            <dl class="ficha">
+              <dt>SUJEITO</dt><dd id="id-sujeito">—</dd>
+              <dt>CONFIANÇA</dt><dd id="id-confianca">—</dd>
+              <div class="barra-conf"><i id="id-barra"></i></div>
+              <dt>EXPRESSÃO</dt><dd id="id-expressao">—</dd>
+              <dt>STATUS</dt><dd id="id-status">AGUARDANDO</dd>
+            </dl>
+            <div class="acoes">
+              <button class="btn-sec" id="btn-camera" type="button">LIGAR SENSOR</button>
+              <button class="btn-sec" id="btn-cadastrar" type="button" disabled>CADASTRAR ROSTO</button>
+              <button class="btn-sec" id="btn-olhar" type="button" disabled>ANALISAR CENA</button>
+            </div>
+            <p class="descricao-visao" id="visao-descricao"></p>
           </div>
-          <p class="vazio" id="vazio-memorias">Nenhuma memória ainda. Ele aprende enquanto conversa.</p>
+        </section>
+
+        <section class="painel">
+          <header class="painel-cab"><span class="codigo">PF.02</span><h2>PERFIL</h2></header>
+          <div class="painel-corpo"><p class="perfil-texto" id="perfil">Conecte o cérebro para ver o que o Jarvis sabe sobre o senhor.</p></div>
+        </section>
+
+        <section class="painel">
+          <header class="painel-cab"><span class="codigo">MM.03</span><h2>MEMÓRIA</h2><span class="extra" id="contador-memorias"></span></header>
+          <div class="painel-corpo">
+            <div class="rolagem"><ul class="lista" id="lista-memorias"></ul></div>
+            <p class="vazio" id="vazio-memorias">Nenhuma memória ainda. Ele aprende enquanto conversa.</p>
+          </div>
+        </section>
+
+        <section class="painel">
+          <header class="painel-cab"><span class="codigo">PS.04</span><h2>PESSOAS · ANIVERSÁRIOS</h2></header>
+          <div class="painel-corpo">
+            <ul class="lista" id="lista-aniversarios"></ul>
+            <p class="vazio" id="vazio-aniversarios">Nenhum aniversário nos próximos 30 dias. Diga: "Jarvis, o aniversário da minha mãe é 10 de novembro".</p>
+          </div>
         </section>
       </aside>
 
+      <!-- centro: o Jarvis -->
       <section class="col col-centro">
-        <div class="core-wrap">
-          <canvas id="espectro" aria-hidden="true"></canvas>
-          <div class="ring r1"></div>
-          <div class="ring r2"></div>
-          <div class="ring r3"></div>
-          <div class="core-center"></div>
-          <div class="core-label" id="rotulo-nucleo">EM ESPERA</div>
+        <div class="reator" aria-hidden="true">
+          <svg viewBox="0 0 400 400">
+            <defs>
+              <radialGradient id="halo" cx="50%" cy="50%" r="50%"><stop offset="60%" stop-color="#4de8f0" stop-opacity="0"/><stop offset="100%" stop-color="#4de8f0" stop-opacity="0.08"/></radialGradient>
+            </defs>
+            <circle cx="200" cy="200" r="198" fill="url(#halo)"/>
+            <g class="gira g1"><circle class="traco-dim" cx="200" cy="200" r="192" fill="none" stroke-width="1" stroke-dasharray="2 7"/></g>
+            <g class="gira g2"><circle class="traco" cx="200" cy="200" r="178" fill="none" stroke-width="2" stroke-dasharray="120 26 40 26 8 26" opacity="0.75"/></g>
+            <circle class="traco-dim" cx="200" cy="200" r="164" fill="none" stroke-width="7" stroke-dasharray="1.2 15.95" opacity="0.9"/>
+            <circle class="traco" cx="200" cy="200" r="150" fill="none" stroke-width="1" opacity="0.6"/>
+            <g class="gira g3"><circle class="traco" cx="200" cy="200" r="122" fill="none" stroke-width="3" stroke-dasharray="70 120" opacity="0.85"/></g>
+            <g class="gira g4"><circle class="traco" cx="200" cy="200" r="108" fill="none" stroke-width="1.5" stroke-dasharray="14 10" opacity="0.55"/></g>
+          </svg>
+          <canvas id="espectro"></canvas>
+          <div class="nucleo"></div>
+        </div>
+        <div class="estado-reator">
+          <div class="rotulo" id="rotulo-nucleo">EM ESPERA</div>
+          <div class="sub" id="sub-nucleo">TOQUE EM INICIAR PARA FALAR</div>
         </div>
 
-        <div class="controles">
+        <div class="doca">
           <button class="icon-btn alerta" id="btn-mudo" type="button" aria-label="Silenciar microfone" aria-pressed="false" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg>
           </button>
           <button class="btn-ligar" id="btn-ligar" type="button">INICIAR</button>
-          <button class="icon-btn" id="btn-camera" type="button" aria-label="Ligar câmera" aria-pressed="false">
+          <button class="icon-btn" id="btn-camera-doca" type="button" aria-label="Ligar sensor óptico" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
           </button>
         </div>
 
         <form class="comando" id="form-comando" autocomplete="off">
           <label class="sr-only" for="campo-comando">Comando para o Jarvis</label>
-          <input id="campo-comando" type="text" placeholder="Digite um comando… ex: o que tenho para hoje?">
+          <input id="campo-comando" type="text" placeholder="Digite um comando… ex: como está o tempo hoje?">
           <button class="icon-btn" type="submit" aria-label="Enviar comando">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           </button>
         </form>
 
-        <section class="painel console">
-          <h2>VOICE LINK</h2>
-          <ol class="falas" id="transcricao" aria-live="polite"></ol>
-          <p class="vazio" id="vazio-transcricao">Toque em INICIAR e fale com o Jarvis. A conversa aparece aqui.</p>
+        <section class="painel comms">
+          <header class="painel-cab"><span class="codigo">CM.00</span><h2>CANAL DE VOZ</h2><span class="extra" id="extra-canal">INATIVO</span></header>
+          <div class="painel-corpo">
+            <ol class="falas" id="transcricao" aria-live="polite"></ol>
+            <p class="vazio" id="vazio-transcricao">A conversa aparece aqui. Experimente: "Jarvis, toca minha playlist", "pesquisa o resultado do jogo de ontem", "gastei 40 reais no almoço".</p>
+          </div>
+        </section>
+
+        <section class="painel comms">
+          <header class="painel-cab"><span class="codigo">LG.99</span><h2>ATIVIDADE DO CÉREBRO</h2></header>
+          <div class="painel-corpo"><div class="rolagem" style="max-height:150px"><ul class="lista atividade" id="lista-atividade"></ul></div></div>
         </section>
       </section>
 
+      <!-- direita: o seu dia -->
       <aside class="col col-dir">
         <section class="painel" id="painel-spotify" hidden>
-          <h2>SPOTIFY</h2>
-          <p class="spotify-nome" id="spotify-nome"></p>
-          <p class="spotify-detalhe" id="spotify-detalhe"></p>
-          <div class="visao-acoes">
-            <a class="btn-sec" id="spotify-app" href="#">ABRIR NO APP</a>
-            <a class="btn-sec" id="spotify-web" href="#" target="_blank" rel="noopener">ABRIR NO NAVEGADOR</a>
+          <header class="painel-cab"><span class="codigo">SP.10</span><h2>SPOTIFY</h2></header>
+          <div class="painel-corpo">
+            <p class="spotify-nome" id="spotify-nome"></p>
+            <p class="spotify-detalhe" id="spotify-detalhe"></p>
+            <div class="acoes">
+              <a class="btn-sec" id="spotify-app" href="#">ABRIR NO APP</a>
+              <a class="btn-sec" id="spotify-web" href="#" target="_blank" rel="noopener">ABRIR NO NAVEGADOR</a>
+            </div>
           </div>
         </section>
+
         <section class="painel">
-          <h2>VISÃO</h2>
-          <div class="visao-tela" id="visao-tela">
-            <video id="video" autoplay playsinline muted hidden></video>
-            <img id="quadro" alt="Último quadro analisado pela câmera" hidden>
-            <span class="aviso" id="aviso-camera">Câmera desligada. Ligue para o Jarvis poder ver o senhor.</span>
-          </div>
-          <p class="visao-descricao" id="visao-descricao"></p>
-          <div class="visao-acoes">
-            <button class="btn-sec" id="btn-olhar" type="button" disabled>ANALISAR AGORA</button>
+          <header class="painel-cab"><span class="codigo">HJ.05</span><h2>HOJE</h2><span class="extra" id="extra-hoje"></span></header>
+          <div class="painel-corpo">
+            <ul class="lista" id="lista-hoje"></ul>
+            <p class="vazio" id="vazio-hoje">Nada marcado para hoje.</p>
           </div>
         </section>
+
         <section class="painel">
-          <h2>AGENDA · HOJE</h2>
-          <ul class="lista" id="lista-agenda"></ul>
-          <p class="vazio" id="vazio-agenda">Nada na agenda hoje.</p>
-        </section>
-        <section class="painel">
-          <h2>ROTINAS</h2>
-          <ul class="lista" id="lista-rotinas"></ul>
-          <p class="vazio" id="vazio-rotinas">Nenhuma rotina cadastrada. Peça: "Jarvis, toda segunda eu treino às 7h".</p>
-        </section>
-        <section class="painel">
-          <h2>TAREFAS <span class="contador" id="contador-tarefas"></span></h2>
-          <div class="rolagem">
-            <ul class="lista" id="lista-tarefas"></ul>
+          <header class="painel-cab"><span class="codigo">TF.06</span><h2>TAREFAS</h2><span class="extra" id="contador-tarefas"></span></header>
+          <div class="painel-corpo">
+            <div class="rolagem"><ul class="lista" id="lista-tarefas"></ul></div>
+            <p class="vazio" id="vazio-tarefas">Nenhuma pendência. Tudo em ordem, senhor.</p>
           </div>
-          <p class="vazio" id="vazio-tarefas">Nenhuma pendência. Tudo em ordem, senhor.</p>
         </section>
+
         <section class="painel">
-          <h2>ATIVIDADE DO CÉREBRO</h2>
-          <div class="rolagem">
-            <ul class="lista atividade" id="lista-atividade"></ul>
+          <header class="painel-cab"><span class="codigo">HB.07</span><h2>HÁBITOS</h2><span class="extra" id="extra-habitos"></span></header>
+          <div class="painel-corpo">
+            <div id="lista-habitos"></div>
+            <p class="vazio" id="vazio-habitos">Nenhum hábito ainda. Diga: "Jarvis, quero beber 8 copos de água por dia".</p>
+          </div>
+        </section>
+
+        <section class="painel">
+          <header class="painel-cab"><span class="codigo">FN.08</span><h2>FINANÇAS</h2><span class="extra" id="extra-financas"></span></header>
+          <div class="painel-corpo">
+            <div id="financas-corpo" hidden>
+              <div class="valor-grande" id="fin-gastos">R$ 0,00</div>
+              <div class="valor-sub" id="fin-sub"></div>
+              <div class="categorias" id="fin-categorias"></div>
+            </div>
+            <p class="vazio" id="vazio-financas">Nenhum lançamento este mês. Diga: "gastei 50 no mercado".</p>
+          </div>
+        </section>
+
+        <section class="painel">
+          <header class="painel-cab"><span class="codigo">RT.09</span><h2>ROTINAS</h2></header>
+          <div class="painel-corpo">
+            <ul class="lista" id="lista-rotinas"></ul>
+            <p class="vazio" id="vazio-rotinas">Nenhuma rotina. Diga: "toda segunda, quarta e sexta eu treino às 7h".</p>
           </div>
         </section>
       </aside>
     </main>
-
-    <footer>STARK-CLASS INTERFACE · CÉREBRO N8N · VOZ ELEVENLABS</footer>
   </div>
 
   <dialog id="dialog-config">
@@ -568,6 +664,7 @@
       <input id="cfg-n8n" type="url" spellcheck="false" required>
       <label for="cfg-agente">ID do agente ElevenLabs</label>
       <input id="cfg-agente" type="text" spellcheck="false" required>
+      <label class="linha-check"><input id="cfg-camera" type="checkbox"> Ligar o sensor e me identificar ao abrir</label>
       <div class="resultado-teste" id="resultado-teste" role="status"></div>
       <div class="dialog-acoes">
         <button class="btn-sec" type="button" id="btn-testar">TESTAR</button>
@@ -582,7 +679,7 @@
     <p id="aprovacao-texto">O Jarvis quer usar uma ferramenta.</p>
     <dl id="aprovacao-detalhes"></dl>
     <div class="dialog-acoes">
-      <button class="btn-sec btn-recusar" type="button" id="btn-recusar">RECUSAR</button>
+      <button class="btn-sec perigo" type="button" id="btn-recusar">RECUSAR</button>
       <button class="btn-pri" type="button" id="btn-aprovar">APROVAR</button>
     </div>
   </dialog>
@@ -590,14 +687,19 @@
 <script type="module">
 import { Conversation } from 'https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.26.0/+esm';
 
+const FACE_API = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.esm.js';
+const FACE_MODELOS = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model/';
+const PC_URL = 'http://127.0.0.1:47801';
 const PADRAO = {
   n8n: 'https://n8n.nutriali.cloud/webhook',
   agente: 'agent_6501ksgr3r2tfycsnwcg3c4yab30',
   chave: '',
+  cameraAuto: true,
 };
 const FUSO = 'America/Sao_Paulo';
+const LIMITE_ROSTO = 0.5;
 // ferramentas que mudam o que aparece nos painéis: depois delas recarregamos o contexto
-const MUDAM_DADOS = new Set(['memoria_salvar', 'memoria_esquecer', 'tarefa_criar', 'tarefa_concluir', 'rotina_salvar', 'agenda_criar']);
+const MUDAM_DADOS = new Set(['memoria_salvar', 'memoria_esquecer', 'tarefa_criar', 'tarefa_concluir', 'rotina_salvar', 'agenda_criar', 'cidade_definir', 'financa_registrar', 'pessoa_salvar', 'habito_criar', 'habito_registrar']);
 const NOMES = {
   memoria_salvar: 'Gravando memória',
   memoria_buscar: 'Consultando memória',
@@ -619,16 +721,31 @@ const NOMES = {
   spotify_anterior: 'Música anterior',
   spotify_volume: 'Ajustando volume',
   spotify_tocando_agora: 'Vendo o que está tocando',
+  pesquisar_internet: 'Pesquisando na internet',
+  clima: 'Consultando o clima',
+  noticias: 'Lendo as notícias',
+  cidade_definir: 'Salvando sua cidade',
+  financa_registrar: 'Registrando lançamento',
+  financas_resumo: 'Calculando finanças',
+  pessoa_salvar: 'Salvando pessoa',
+  pessoas_buscar: 'Procurando pessoa',
+  aniversarios_proximos: 'Vendo aniversários',
+  habito_criar: 'Criando hábito',
+  habito_registrar: 'Registrando hábito',
+  habitos_status: 'Vendo seus hábitos',
   ver_camera: 'Olhando pela câmera',
+  controlar_pc: 'Controlando o PC',
 };
 const ROTULOS = {
-  offline: ['EM ESPERA', 'OFFLINE'],
-  conectando: ['CONECTANDO', 'CONECTANDO'],
-  ouvindo: ['OUVINDO', 'ONLINE'],
-  falando: ['FALANDO', 'ONLINE'],
-  ferramenta: ['PROCESSANDO', 'ONLINE'],
+  offline: ['EM ESPERA', 'OFFLINE', 'TOQUE EM INICIAR PARA FALAR'],
+  conectando: ['CONECTANDO', 'CONECTANDO', 'ESTABELECENDO LINK DE VOZ'],
+  ouvindo: ['OUVINDO', 'ONLINE', 'PODE FALAR, SENHOR'],
+  falando: ['FALANDO', 'ONLINE', ''],
+  ferramenta: ['PROCESSANDO', 'ONLINE', 'CONSULTANDO O CÉREBRO'],
 };
+const EXPRESSOES = { neutral: 'neutro', happy: 'feliz', sad: 'triste', angry: 'irritado', fearful: 'apreensivo', disgusted: 'incomodado', surprised: 'surpreso' };
 const DEMO = new URLSearchParams(location.search).has('demo');
+const AUTO = new URLSearchParams(location.search).has('auto');
 
 const $ = (id) => document.getElementById(id);
 let config = lerConfig();
@@ -643,37 +760,64 @@ let streamCamera = null;
 let quadroAnimacao = null;
 let timerContexto = null;
 
+// estado do reconhecimento facial (tudo local: o rosto nunca sai do navegador)
+const id = {
+  faceapi: null,
+  carregando: null,
+  rosto: lerRosto(),
+  rodando: false,
+  ultimo: null,
+  acertosSeguidos: 0,
+  errosSeguidos: 0,
+  confirmado: false,
+  saudadoEm: 0,
+  cadastro: null,
+};
+
 // ---------- utilidades ----------
 function el(tag, props = {}, ...filhos) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
     if (k === 'class') n.className = v;
+    else if (k === 'style') n.setAttribute('style', v);
     else n.setAttribute(k, v);
   }
   for (const f of filhos) if (f != null) n.append(f);
   return n;
 }
 
-function lerConfig() {
+function guardar(chave, valor) {
+  try { localStorage.setItem(chave, JSON.stringify(valor)); } catch {}
+}
+
+function ler(chave, padrao) {
   try {
-    return { ...PADRAO, ...JSON.parse(localStorage.getItem('jarvis.config') || '{}') };
+    const v = localStorage.getItem(chave);
+    return v ? JSON.parse(v) : padrao;
   } catch {
-    return { ...PADRAO };
+    return padrao;
   }
+}
+
+function lerConfig() {
+  return { ...PADRAO, ...ler('jarvis.config', {}) };
 }
 
 function salvarConfig(novo) {
   config = { ...PADRAO, ...novo };
-  try { localStorage.setItem('jarvis.config', JSON.stringify(config)); } catch {}
+  guardar('jarvis.config', config);
 }
 
-function dataLocal(iso) {
-  return new Date(iso);
+function lerRosto() {
+  const r = ler('jarvis.rosto', null);
+  return Array.isArray(r) && r.length === 128 ? Float32Array.from(r) : null;
 }
+
+const brl = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function horaCurta(iso) {
   if (!iso || iso.length <= 10) return 'dia';
-  return dataLocal(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO });
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO });
 }
 
 function chaveDia(d) {
@@ -682,7 +826,7 @@ function chaveDia(d) {
 
 function descreverPrazo(iso) {
   if (!iso) return { texto: 'sem prazo', classe: '' };
-  const d = dataLocal(iso);
+  const d = new Date(iso);
   const agora = new Date();
   const amanha = new Date(agora.getTime() + 86400000);
   const hora = horaCurta(iso);
@@ -693,13 +837,18 @@ function descreverPrazo(iso) {
 }
 
 function preencherLista(idLista, idVazio, itens, montar) {
-  const lista = $(idLista);
-  lista.replaceChildren(...itens.map(montar));
+  $(idLista).replaceChildren(...itens.map(montar));
   $(idVazio).hidden = itens.length > 0;
+}
+
+function definirChip(nome, led, texto) {
+  $(`led-${nome}`).className = `led ${led}`;
+  $(`tel-${nome}`).textContent = texto;
 }
 
 // ---------- n8n ----------
 async function chamarN8n(caminho, { method = 'GET', body, keepalive = false } = {}) {
+  const inicio = performance.now();
   const resp = await fetch(`${config.n8n.replace(/\/+$/, '')}/${caminho}`, {
     method,
     keepalive,
@@ -708,34 +857,27 @@ async function chamarN8n(caminho, { method = 'GET', body, keepalive = false } = 
   });
   if (!resp.ok) throw new Error(`o n8n respondeu ${resp.status}`);
   const texto = await resp.text();
+  if (caminho === 'jarvis/contexto') definirChip('cerebro', 'ok', `${Math.round(performance.now() - inicio)} MS`);
   return texto ? JSON.parse(texto) : {};
-}
-
-function definirN8n(estado) {
-  const mapa = { online: ['ONLINE', ''], offline: ['OFFLINE', 'off'], 'sem chave': ['SEM CHAVE', 'off'], verificando: ['VERIFICANDO', 'wait'], demo: ['DEMONSTRAÇÃO', 'wait'] };
-  const [texto, classe] = mapa[estado] || mapa.offline;
-  $('status-n8n').textContent = texto;
-  $('dot-n8n').className = `dot ${classe}`;
 }
 
 async function carregarContexto() {
   if (DEMO) {
     renderizarContexto(contextoDemo());
-    definirN8n('demo');
+    definirChip('cerebro', 'wait', 'DEMO');
     return contextoDemo();
   }
   if (!config.chave) {
-    definirN8n('sem chave');
+    definirChip('cerebro', 'off', 'SEM CHAVE');
     return null;
   }
   try {
     const dados = await chamarN8n('jarvis/contexto');
     if (!dados.ok) throw new Error('chave recusada pelo n8n');
     renderizarContexto(dados);
-    definirN8n('online');
     return dados;
   } catch (erro) {
-    definirN8n('offline');
+    definirChip('cerebro', 'off', 'OFFLINE');
     registrarAtividade(`Cérebro indisponível: ${erro.message}`, 'erro');
     return null;
   }
@@ -746,32 +888,101 @@ function recarregarContextoEmBreve(ms = 1500) {
   timerContexto = setTimeout(carregarContexto, ms);
 }
 
+// ---------- painéis ----------
+const ICONES_CLIMA = {
+  sol: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  nuvem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 18h10a4 4 0 0 0 0-8 6 6 0 0 0-11.6 1.6A3.2 3.2 0 0 0 7 18z"/></svg>',
+  chuva: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 15h10a4 4 0 0 0 0-8 6 6 0 0 0-11.6 1.6A3.2 3.2 0 0 0 7 15z"/><path d="M9 18l-1 3M13 18l-1 3M17 18l-1 3"/></svg>',
+  raio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 15h10a4 4 0 0 0 0-8 6 6 0 0 0-11.6 1.6A3.2 3.2 0 0 0 7 15z"/><path d="M13 15l-2 4h3l-2 4"/></svg>',
+};
+
+function iconeClima(codigo) {
+  if (codigo >= 95) return ICONES_CLIMA.raio;
+  if (codigo >= 51) return ICONES_CLIMA.chuva;
+  if (codigo >= 2) return ICONES_CLIMA.nuvem;
+  return ICONES_CLIMA.sol;
+}
+
 function renderizarContexto(ctx) {
   $('perfil').textContent = (ctx.perfil || '').trim() || 'Ainda não sei muito sobre o senhor. Converse comigo e eu aprendo.';
 
-  const memorias = ctx.memorias || [];
-  $('contador-memorias').textContent = memorias.length ? `· ${memorias.length}` : '';
-  preencherLista('lista-memorias', 'vazio-memorias', memorias, (m) =>
-    el('li', {}, el('span', { class: 'chip' }, m.categoria || 'fato'), el('span', { class: 'texto' }, m.conteudo || '')));
+  // clima no topo (o ícone é um SVG fixo daqui do código, não vem do servidor)
+  const clima = ctx.clima;
+  $('clima-chip').hidden = !clima;
+  if (clima) {
+    $('clima-icone').innerHTML = iconeClima(clima.agora?.codigo ?? 0);
+    $('clima-temp').textContent = `${clima.agora?.temperatura ?? '--'}°`;
+    $('clima-desc').textContent = `${clima.agora?.descricao || ''} · ${(clima.cidade || '').split(',')[0]}`;
+  }
 
-  preencherLista('lista-agenda', 'vazio-agenda', ctx.agenda || [], (e) =>
-    el('li', {}, el('span', { class: 'hora' }, horaCurta(e.inicio)),
-      el('span', { class: 'texto' }, e.titulo, e.local ? el('span', { class: 'sub' }, e.local) : null)));
+  const memorias = ctx.memorias || [];
+  $('contador-memorias').textContent = memorias.length ? `${memorias.length} REG` : '';
+  preencherLista('lista-memorias', 'vazio-memorias', memorias, (m) =>
+    el('li', {}, el('span', { class: 'tag' }, m.categoria || 'fato'), el('span', { class: 'texto' }, m.conteudo || '')));
+
+  // hoje: agenda + rotinas do dia numa linha do tempo
+  const agora = new Date();
+  const horaAgora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: FUSO });
+  const itensHoje = [
+    ...(ctx.agenda || []).map((e) => ({ hora: horaCurta(e.inicio), titulo: e.titulo, sub: e.local, tipo: 'agenda' })),
+    ...(ctx.rotinas || []).filter((r) => r.hoje).map((r) => ({ hora: r.horario || '--:--', titulo: r.nome, sub: r.descricao, tipo: 'rotina' })),
+  ].sort((a, b) => String(a.hora).localeCompare(String(b.hora)));
+  $('extra-hoje').textContent = agora.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: FUSO }).toUpperCase();
+  preencherLista('lista-hoje', 'vazio-hoje', itensHoje, (i) =>
+    el('li', { class: i.hora !== 'dia' && i.hora < horaAgora ? 'passado' : '' },
+      el('span', { class: 'hora' }, i.hora),
+      el('span', { class: 'texto' }, i.titulo, i.sub ? el('span', { class: 'sub' }, i.sub) : null),
+      el('span', { class: 'tag' }, i.tipo)));
 
   const rotinas = [...(ctx.rotinas || [])].sort((a, b) => (b.hoje - a.hoje) || String(a.horario).localeCompare(String(b.horario)));
   preencherLista('lista-rotinas', 'vazio-rotinas', rotinas, (r) =>
     el('li', {}, el('span', { class: 'hora' }, r.horario || '--:--'),
       el('span', { class: 'texto' }, r.nome, el('span', { class: 'sub' }, r.dias || '')),
-      r.hoje ? el('span', { class: 'chip hoje' }, 'hoje') : null));
+      r.hoje ? el('span', { class: 'tag hoje' }, 'hoje') : null));
 
   const tarefas = ctx.tarefas || [];
-  $('contador-tarefas').textContent = tarefas.length ? `· ${tarefas.length}` : '';
+  $('contador-tarefas').textContent = tarefas.length ? `${tarefas.length} PEND` : '';
   preencherLista('lista-tarefas', 'vazio-tarefas', tarefas, (t) => {
     const prazo = descreverPrazo(t.vence_em);
     return el('li', {},
       el('span', { class: 'texto' }, t.titulo, el('span', { class: 'sub' }, prazo.texto)),
-      t.prioridade === 'alta' ? el('span', { class: 'chip alta' }, 'alta') : prazo.classe ? el('span', { class: `chip ${prazo.classe}` }, prazo.classe) : null);
+      t.prioridade === 'alta' ? el('span', { class: 'tag alta' }, 'alta') : prazo.classe ? el('span', { class: `tag ${prazo.classe}` }, prazo.classe) : null);
   });
+
+  const habitos = ctx.habitos || [];
+  const completos = habitos.filter((h) => h.completo).length;
+  $('extra-habitos').textContent = habitos.length ? `${completos}/${habitos.length} HOJE` : '';
+  $('lista-habitos').replaceChildren(...habitos.map((h) => {
+    const pct = Math.min(100, Math.round((h.feito_hoje / (h.meta || 1)) * 100));
+    return el('div', { class: `habito${h.completo ? ' completo' : ''}` },
+      el('span', { class: 'nome' }, h.nome),
+      el('span', { class: 'num' }, `${h.feito_hoje}/${h.meta} ${h.unidade || ''}`),
+      el('div', { class: 'barra' }, el('i', { style: `width:${pct}%` })),
+      h.sequencia ? el('span', { class: 'seq' }, `SEQUÊNCIA · ${h.sequencia} DIA${h.sequencia > 1 ? 'S' : ''}`) : null);
+  }));
+  $('vazio-habitos').hidden = habitos.length > 0;
+
+  const fin = ctx.financas;
+  const temFinancas = fin && (fin.total_gastos || fin.total_entradas);
+  $('financas-corpo').hidden = !temFinancas;
+  $('vazio-financas').hidden = !!temFinancas;
+  $('extra-financas').textContent = fin?.mes ? fin.mes.toUpperCase() : '';
+  if (temFinancas) {
+    $('fin-gastos').textContent = brl(fin.total_gastos);
+    $('fin-sub').textContent = `GASTO NO MÊS · ENTRADAS ${brl(fin.total_entradas)} · SALDO ${brl(fin.saldo)}`;
+    const maior = Math.max(1, ...fin.categorias.map((c) => c.total));
+    $('fin-categorias').replaceChildren(...fin.categorias.slice(0, 5).map((c) =>
+      el('div', { class: 'categoria' },
+        el('span', { class: 'nome' }, c.categoria),
+        el('span', { class: 'trilho' }, el('i', { style: `width:${Math.round((c.total / maior) * 100)}%` })),
+        el('span', { class: 'valor' }, brl(c.total)))));
+  }
+
+  preencherLista('lista-aniversarios', 'vazio-aniversarios', ctx.aniversarios || [], (a) =>
+    el('li', {},
+      el('span', { class: 'hora' }, a.data),
+      el('span', { class: 'texto' }, a.nome, el('span', { class: 'sub' }, [a.relacao, a.idade ? `faz ${a.idade} anos` : ''].filter(Boolean).join(' · '))),
+      el('span', { class: `tag${a.dias <= 1 ? ' hoje' : ''}` }, a.dias === 0 ? 'hoje' : a.dias === 1 ? 'amanhã' : `${a.dias}d`)));
 }
 
 function variaveisPadrao() {
@@ -788,10 +999,11 @@ function variaveisPadrao() {
 // ---------- estado visual ----------
 function definirEstado(estado) {
   document.body.dataset.estado = estado;
-  const [nucleo, link] = ROTULOS[estado] || ROTULOS.offline;
+  const [nucleo, link, sub] = ROTULOS[estado] || ROTULOS.offline;
   $('rotulo-nucleo').textContent = nucleo;
-  $('status-link').textContent = link;
-  $('dot-link').className = `dot ${estado === 'offline' ? 'off' : estado === 'conectando' ? 'wait' : ''}`;
+  $('sub-nucleo').textContent = estado === 'offline' && id.confirmado ? 'RENATO IDENTIFICADO · TOQUE EM INICIAR' : sub;
+  $('extra-canal').textContent = estado === 'offline' ? 'INATIVO' : 'ATIVO';
+  definirChip('voz', estado === 'offline' ? 'off' : estado === 'conectando' ? 'wait' : 'on', link);
 }
 
 function atualizarEstadoFala() {
@@ -801,8 +1013,8 @@ function atualizarEstadoFala() {
 
 function adicionarFala(de, texto) {
   if (!texto || !texto.trim()) return;
-  if (de !== 'ferramenta') mensagens.push({ de, texto, em: new Date().toISOString() });
-  const rotulo = { renato: 'RENATO', jarvis: 'JARVIS', ferramenta: 'CÉREBRO' }[de];
+  if (de === 'renato' || de === 'jarvis') mensagens.push({ de, texto, em: new Date().toISOString() });
+  const rotulo = { renato: 'RENATO', jarvis: 'JARVIS', ferramenta: 'CÉREBRO', sistema: 'SISTEMA' }[de];
   const lista = $('transcricao');
   lista.append(el('li', { class: de }, el('span', { class: 'quem' }, rotulo), el('span', {}, texto)));
   lista.scrollTop = lista.scrollHeight;
@@ -813,10 +1025,17 @@ function registrarAtividade(texto, tipo = '') {
   const lista = $('lista-atividade');
   const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: FUSO });
   lista.prepend(el('li', { class: tipo }, el('span', { class: 'hora' }, hora), el('span', { class: 'texto' }, texto)));
-  while (lista.children.length > 40) lista.lastChild.remove();
+  while (lista.children.length > 50) lista.lastChild.remove();
 }
 
-// ---------- espectro do núcleo ----------
+function avisar(titulo, texto) {
+  const caixa = $('avisos');
+  const aviso = el('div', { class: 'aviso-toast' }, el('div', { class: 't1' }, titulo), el('div', { class: 't2' }, texto));
+  caixa.append(aviso);
+  setTimeout(() => aviso.remove(), 4600);
+}
+
+// ---------- reator: espectro da voz ----------
 function animar() {
   const canvas = $('espectro');
   const ctx = canvas.getContext('2d');
@@ -832,17 +1051,19 @@ function animar() {
     document.body.style.setProperty('--nivel', Math.min(1, nivel * 1.6).toFixed(3));
 
     const freq = falando ? conversa.getOutputByteFrequencyData() : conversa.getInputByteFrequencyData();
-    const barras = 72;
+    const barras = 96;
     const centro = lado / 2;
-    const raio = lado * 0.36;
+    const raio = lado * 0.335;
     ctx.strokeStyle = cor();
-    ctx.lineWidth = Math.max(2, lado * 0.006);
+    ctx.lineWidth = Math.max(2, lado * 0.005);
     ctx.lineCap = 'round';
-    ctx.globalAlpha = 0.85;
+    ctx.shadowColor = cor();
+    ctx.shadowBlur = lado * 0.015;
     for (let i = 0; i < barras; i++) {
       const v = freq.length ? freq[Math.floor((i % (barras / 2)) / (barras / 2) * freq.length * 0.7)] / 255 : 0;
-      const comp = lado * 0.015 + v * lado * 0.09;
+      const comp = lado * 0.01 + v * lado * 0.075;
       const ang = (i / barras) * Math.PI * 2 - Math.PI / 2;
+      ctx.globalAlpha = 0.35 + v * 0.65;
       ctx.beginPath();
       ctx.moveTo(centro + Math.cos(ang) * raio, centro + Math.sin(ang) * raio);
       ctx.lineTo(centro + Math.cos(ang) * (raio + comp), centro + Math.sin(ang) * (raio + comp));
@@ -854,24 +1075,52 @@ function animar() {
   quadroAnimacao = requestAnimationFrame(passo);
 }
 
-// ---------- câmera ----------
+// ---------- fundo: partículas ----------
+function particulas() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const canvas = $('particulas');
+  const ctx = canvas.getContext('2d');
+  const pontos = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), v: 0.00004 + Math.random() * 0.00012, r: Math.random() * 1.4 + 0.3, a: Math.random() * 0.5 + 0.15 }));
+  const passo = () => {
+    const w = canvas.width = innerWidth;
+    const h = canvas.height = innerHeight;
+    ctx.clearRect(0, 0, w, h);
+    for (const p of pontos) {
+      p.y -= p.v * 16;
+      if (p.y < -0.02) { p.y = 1.02; p.x = Math.random(); }
+      ctx.globalAlpha = p.a;
+      ctx.fillStyle = '#4de8f0';
+      ctx.beginPath();
+      ctx.arc(p.x * w, p.y * h, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    setTimeout(() => requestAnimationFrame(passo), 50);
+  };
+  passo();
+}
+
+// ---------- sensor óptico (câmera) ----------
 async function ligarCamera() {
   if (streamCamera) return true;
   try {
     streamCamera = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }, audio: false });
   } catch (erro) {
     registrarAtividade(`Câmera bloqueada: ${erro.message}`, 'erro');
+    definirChip('visao', 'off', 'BLOQUEADA');
     return false;
   }
   const video = $('video');
   video.srcObject = streamCamera;
   video.hidden = false;
-  $('quadro').hidden = true;
   $('aviso-camera').hidden = true;
-  $('btn-camera').setAttribute('aria-pressed', 'true');
-  $('btn-camera').setAttribute('aria-label', 'Desligar câmera');
+  $('linha-scan').hidden = false;
+  for (const b of ['btn-camera', 'btn-camera-doca']) $(b).setAttribute('aria-pressed', 'true');
+  $('btn-camera').textContent = 'DESLIGAR SENSOR';
   $('btn-olhar').disabled = false;
-  registrarAtividade('Câmera ligada', 'ok');
+  $('btn-cadastrar').disabled = false;
+  definirChip('visao', 'on', 'ATIVA');
+  registrarAtividade('Sensor óptico ligado', 'ok');
+  iniciarReconhecimento();
   return true;
 }
 
@@ -879,12 +1128,21 @@ function desligarCamera() {
   if (!streamCamera) return;
   streamCamera.getTracks().forEach((t) => t.stop());
   streamCamera = null;
+  id.rodando = false;
+  id.confirmado = false;
   $('video').hidden = true;
   $('video').srcObject = null;
-  $('aviso-camera').hidden = !$('quadro').hidden;
-  $('btn-camera').setAttribute('aria-pressed', 'false');
-  $('btn-camera').setAttribute('aria-label', 'Ligar câmera');
+  $('aviso-camera').hidden = false;
+  $('linha-scan').hidden = true;
+  $('scanner').classList.remove('confirmado');
+  $('overlay').getContext('2d').clearRect(0, 0, $('overlay').width, $('overlay').height);
+  for (const b of ['btn-camera', 'btn-camera-doca']) $(b).setAttribute('aria-pressed', 'false');
+  $('btn-camera').textContent = 'LIGAR SENSOR';
   $('btn-olhar').disabled = true;
+  $('btn-cadastrar').disabled = true;
+  definirChip('visao', '', 'DESLIGADA');
+  atualizarFicha({ sujeito: '—', confianca: null, expressao: '—', status: 'AGUARDANDO' });
+  $('id-estado-curto').textContent = 'OFFLINE';
 }
 
 function capturarQuadro() {
@@ -898,26 +1156,283 @@ function capturarQuadro() {
   return canvas.toDataURL('image/jpeg', 0.8);
 }
 
+function descricaoIdentidade() {
+  if (!id.ultimo) return '';
+  if (!id.rosto) return 'Identificação local: nenhum rosto cadastrado ainda.';
+  if (id.confirmado) return `Identificação local: Renato confirmado (${id.ultimo.confianca}% de confiança), expressão aparente ${id.ultimo.expressao}.`;
+  return id.ultimo.temRosto ? 'Identificação local: há um rosto na câmera que NÃO corresponde ao do Renato.' : 'Identificação local: nenhum rosto visível agora.';
+}
+
 async function olhar(pergunta) {
   if (!(await ligarCamera())) return 'Não consegui acessar a câmera: o Renato precisa permitir o uso da câmera no navegador.';
   const video = $('video');
   if (!video.videoWidth) await new Promise((ok) => video.addEventListener('loadeddata', ok, { once: true }));
   const imagem = capturarQuadro();
-  const tela = $('visao-tela');
-  tela.classList.add('escaneando');
-  $('visao-descricao').textContent = 'Analisando…';
+  $('visao-descricao').textContent = 'Analisando a cena…';
   try {
     const resposta = await chamarN8n('jarvis/visao', { method: 'POST', body: { imagem, pergunta: pergunta || 'O que você vê agora?' } });
     const descricao = resposta.descricao || 'Não consegui interpretar a imagem.';
     $('visao-descricao').textContent = descricao;
-    registrarAtividade('Visão: imagem analisada', 'ok');
-    return descricao;
+    registrarAtividade('Visão: cena analisada', 'ok');
+    return [descricaoIdentidade(), descricao].filter(Boolean).join(' ');
   } catch (erro) {
     $('visao-descricao').textContent = `Falha na visão: ${erro.message}`;
     registrarAtividade(`Visão falhou: ${erro.message}`, 'erro');
-    return `A análise da câmera falhou (${erro.message}).`;
-  } finally {
-    tela.classList.remove('escaneando');
+    return [descricaoIdentidade(), `A análise detalhada da câmera falhou (${erro.message}).`].filter(Boolean).join(' ');
+  }
+}
+
+// ---------- reconhecimento facial ----------
+async function carregarFaceApi() {
+  if (id.faceapi) return id.faceapi;
+  if (!id.carregando) {
+    id.carregando = (async () => {
+      atualizarFicha({ status: 'CARREGANDO MÓDULO BIOMÉTRICO' });
+      definirChip('visao', 'wait', 'CARREGANDO');
+      const faceapi = await import(FACE_API);
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELOS),
+        faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODELOS),
+        faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELOS),
+        faceapi.nets.faceExpressionNet.loadFromUri(FACE_MODELOS),
+      ]);
+      id.faceapi = faceapi;
+      return faceapi;
+    })();
+  }
+  return id.carregando;
+}
+
+function atualizarFicha({ sujeito, confianca, expressao, status, classeStatus }) {
+  if (sujeito !== undefined) $('id-sujeito').textContent = sujeito;
+  if (confianca !== undefined) {
+    $('id-confianca').textContent = confianca == null ? '—' : `${confianca}%`;
+    $('id-barra').style.width = `${confianca || 0}%`;
+  }
+  if (expressao !== undefined) $('id-expressao').textContent = expressao;
+  if (status !== undefined) {
+    $('id-status').textContent = status;
+    $('id-status').className = classeStatus || '';
+  }
+}
+
+async function iniciarReconhecimento() {
+  if (id.rodando) return;
+  id.rodando = true;
+  try {
+    await carregarFaceApi();
+  } catch (erro) {
+    id.rodando = false;
+    atualizarFicha({ status: 'MÓDULO BIOMÉTRICO FALHOU', classeStatus: 'alerta' });
+    registrarAtividade(`Reconhecimento facial indisponível: ${erro.message}`, 'erro');
+    definirChip('visao', 'on', 'ATIVA');
+    return;
+  }
+  definirChip('visao', 'on', 'RASTREANDO');
+  atualizarFicha({ status: id.rosto ? 'PROCURANDO ROSTO' : 'CADASTRE SEU ROSTO', classeStatus: id.rosto ? '' : 'alerta' });
+  $('btn-cadastrar').textContent = id.rosto ? 'RECADASTRAR' : 'CADASTRAR ROSTO';
+  const ciclo = async () => {
+    if (!id.rodando || !streamCamera) return;
+    try {
+      await analisarQuadro();
+    } catch (erro) {
+      registrarAtividade(`Rastreamento: ${erro.message}`, 'erro');
+    }
+    setTimeout(ciclo, 280);
+  };
+  ciclo();
+}
+
+async function analisarQuadro() {
+  const faceapi = id.faceapi;
+  const video = $('video');
+  if (!video.videoWidth) return;
+  const r = await faceapi
+    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
+    .withFaceLandmarks(true)
+    .withFaceExpressions()
+    .withFaceDescriptor();
+
+  const canvas = $('overlay');
+  if (canvas.width !== video.videoWidth) { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!r) {
+    id.ultimo = { temRosto: false };
+    id.acertosSeguidos = 0;
+    id.errosSeguidos = 0;
+    if (id.confirmado) {
+      id.confirmado = false;
+      $('scanner').classList.remove('confirmado');
+    }
+    atualizarFicha({ sujeito: '—', confianca: null, expressao: '—', status: id.rosto ? 'PROCURANDO ROSTO' : 'CADASTRE SEU ROSTO', classeStatus: id.rosto ? '' : 'alerta' });
+    $('id-estado-curto').textContent = 'PROCURANDO';
+    return;
+  }
+
+  const [exp, valor] = Object.entries(r.expressions).sort((a, b) => b[1] - a[1])[0];
+  const expressao = valor > 0.5 ? EXPRESSOES[exp] || exp : 'neutro';
+
+  if (id.cadastro) id.cadastro.amostras.push(Array.from(r.descriptor));
+
+  let confianca = null;
+  let reconhecido = false;
+  if (id.rosto) {
+    const distancia = faceapi.euclideanDistance(r.descriptor, id.rosto);
+    confianca = Math.max(0, Math.min(99, Math.round(100 - distancia * 60)));
+    reconhecido = distancia < LIMITE_ROSTO;
+    id.acertosSeguidos = reconhecido ? id.acertosSeguidos + 1 : 0;
+    id.errosSeguidos = reconhecido ? 0 : id.errosSeguidos + 1;
+    if (!id.confirmado && id.acertosSeguidos >= 2) aoIdentificar(confianca, expressao);
+    if (id.confirmado && id.errosSeguidos >= 4) {
+      id.confirmado = false;
+      $('scanner').classList.remove('confirmado');
+    }
+  }
+  id.ultimo = { temRosto: true, confianca, expressao };
+
+  const cor = id.confirmado ? '#5dfca0' : id.rosto ? (id.errosSeguidos >= 3 ? '#ff5d6c' : '#4de8f0') : '#ffa24c';
+  desenharAlvo(ctx, r, cor, id.confirmado ? `RENATO · ${confianca}%` : id.rosto ? (id.errosSeguidos >= 3 ? 'NÃO IDENTIFICADO' : 'ANALISANDO…') : 'ROSTO DETECTADO');
+
+  if (id.cadastro) {
+    atualizarFicha({ status: `CADASTRANDO ${Math.min(100, Math.round((id.cadastro.amostras.length / 10) * 100))}%`, classeStatus: 'alerta' });
+  } else if (id.confirmado) {
+    atualizarFicha({ sujeito: 'RENATO', confianca, expressao: expressao.toUpperCase(), status: 'IDENTIDADE CONFIRMADA', classeStatus: 'ok' });
+    $('id-estado-curto').textContent = 'CONFIRMADO';
+  } else if (id.rosto) {
+    const desconhecido = id.errosSeguidos >= 3;
+    atualizarFicha({ sujeito: desconhecido ? 'DESCONHECIDO' : 'VERIFICANDO', confianca, expressao: expressao.toUpperCase(), status: desconhecido ? 'ROSTO NÃO CORRESPONDE' : 'COMPARANDO PADRÃO FACIAL', classeStatus: desconhecido ? 'alerta' : '' });
+    $('id-estado-curto').textContent = desconhecido ? 'DESCONHECIDO' : 'ANALISANDO';
+  } else {
+    atualizarFicha({ sujeito: 'SEM CADASTRO', confianca: null, expressao: expressao.toUpperCase(), status: 'CADASTRE SEU ROSTO', classeStatus: 'alerta' });
+    $('id-estado-curto').textContent = 'SEM CADASTRO';
+  }
+}
+
+// a câmera aparece espelhada (CSS), então o texto é desenhado espelhado para ficar legível
+function desenharAlvo(ctx, r, cor, rotulo) {
+  const { x, y, width: w, height: h } = r.detection.box;
+  const canto = Math.max(14, w * 0.18);
+  ctx.strokeStyle = cor;
+  ctx.lineWidth = Math.max(2, w * 0.012);
+  ctx.shadowColor = cor;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+    ctx.moveTo(cx, cy + dy * canto);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + dx * canto, cy);
+  }
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = cor;
+  ctx.globalAlpha = 0.75;
+  for (const p of r.landmarks.positions) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(1.2, w * 0.006), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const tamanho = Math.max(13, Math.round(w * 0.075));
+  ctx.font = `${tamanho}px "Share Tech Mono", monospace`;
+  const larguraTexto = ctx.measureText(rotulo).width;
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.fillStyle = 'rgba(3,10,14,0.75)';
+  ctx.fillRect(-(x + w), y - tamanho - 12, larguraTexto + 14, tamanho + 8);
+  ctx.fillStyle = cor;
+  ctx.fillText(rotulo, -(x + w) + 7, y - 10);
+  ctx.restore();
+}
+
+function aoIdentificar(confianca, expressao) {
+  id.confirmado = true;
+  $('scanner').classList.add('confirmado');
+  definirChip('visao', 'ok', 'RENATO');
+  if (Date.now() - id.saudadoEm < 10 * 60 * 1000) return;
+  id.saudadoEm = Date.now();
+  const hora = Number(new Date().toLocaleString('pt-BR', { hour: 'numeric', hour12: false, timeZone: FUSO }));
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  avisar('IDENTIDADE CONFIRMADA', `${saudacao}, Renato. Bem-vindo de volta.`);
+  registrarAtividade(`Renato identificado (${confianca}%), expressão ${expressao}`, 'ok');
+  if (!conversa) {
+    definirEstado('offline');
+    $('btn-ligar').classList.add('chamando');
+  }
+  avisarJarvisDaIdentidade();
+}
+
+function avisarJarvisDaIdentidade() {
+  if (!conversa || !id.confirmado || !id.ultimo) return;
+  conversa.sendContextualUpdate(`[Sensor óptico] O Renato foi identificado pela câmera agora (confiança ${id.ultimo.confianca}%). Expressão aparente: ${id.ultimo.expressao}. Cumprimente-o pelo nome de forma natural, sem citar porcentagens.`);
+  adicionarFala('sistema', `Renato identificado · expressão ${id.ultimo.expressao}`);
+}
+
+async function cadastrarRosto() {
+  if (!streamCamera) await ligarCamera();
+  try {
+    await carregarFaceApi();
+  } catch {
+    return;
+  }
+  id.cadastro = { amostras: [] };
+  $('btn-cadastrar').disabled = true;
+  avisar('CADASTRO BIOMÉTRICO', 'Olhe para a câmera e mexa levemente a cabeça.');
+  const inicio = Date.now();
+  while (id.cadastro.amostras.length < 10 && Date.now() - inicio < 15000) {
+    await new Promise((ok) => setTimeout(ok, 300));
+  }
+  const amostras = id.cadastro.amostras;
+  id.cadastro = null;
+  $('btn-cadastrar').disabled = false;
+  if (amostras.length < 5) {
+    atualizarFicha({ status: 'CADASTRO FALHOU: ROSTO NÃO VISTO', classeStatus: 'alerta' });
+    return;
+  }
+  const media = new Array(128).fill(0);
+  for (const a of amostras) a.forEach((v, i) => { media[i] += v / amostras.length; });
+  id.rosto = Float32Array.from(media);
+  guardar('jarvis.rosto', media);
+  id.acertosSeguidos = 0;
+  id.confirmado = false;
+  $('btn-cadastrar').textContent = 'RECADASTRAR';
+  registrarAtividade(`Rosto cadastrado com ${amostras.length} amostras (salvo só neste navegador)`, 'ok');
+  avisar('CADASTRO CONCLUÍDO', 'Padrão facial salvo neste navegador.');
+}
+
+// ---------- controle do PC (agente local) ----------
+// só consulta o agente local depois do primeiro uso, para o Chrome não pedir acesso à rede local à toa
+async function pcStatus() {
+  if (!ler('jarvis.pc', false)) return false;
+  try {
+    const r = await fetch(`${PC_URL}/status`, { headers: { 'x-jarvis-key': config.chave } });
+    const dados = await r.json();
+    definirChip('pc', dados.ok ? 'ok' : 'off', dados.ok ? 'ONLINE' : 'RECUSADO');
+    return dados.ok;
+  } catch {
+    definirChip('pc', '', 'OFFLINE');
+    return false;
+  }
+}
+
+async function controlarPc({ acao, alvo = '', valor = '' } = {}) {
+  try {
+    const r = await fetch(`${PC_URL}/acao`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-jarvis-key': config.chave },
+      body: JSON.stringify({ acao, alvo, valor }),
+    });
+    const dados = await r.json();
+    registrarAtividade(`PC: ${dados.mensagem || acao}`, dados.ok ? 'ok' : 'erro');
+    definirChip('pc', 'ok', 'ONLINE');
+    guardar('jarvis.pc', true);
+    return dados.mensagem || (dados.ok ? 'Feito.' : 'O PC recusou o comando.');
+  } catch {
+    definirChip('pc', '', 'OFFLINE');
+    return 'O agente do PC não está rodando. Peça para o Renato abrir o "Jarvis PC" no computador (pasta pc do projeto).';
   }
 }
 
@@ -1013,6 +1528,7 @@ async function ligar() {
   }
   const botao = $('btn-ligar');
   botao.disabled = true;
+  botao.classList.remove('chamando');
   definirEstado('conectando');
   mensagens = [];
   conversaId = null;
@@ -1027,7 +1543,10 @@ async function ligar() {
       agentId: config.agente,
       connectionType: 'webrtc',
       dynamicVariables: { ...variaveisPadrao(), ...(ctx?.variaveis || {}) },
-      clientTools: { ver_camera: ({ pergunta } = {}) => olhar(pergunta) },
+      clientTools: {
+        ver_camera: ({ pergunta } = {}) => olhar(pergunta),
+        controlar_pc: controlarPc,
+      },
       onConnect: ({ conversationId }) => {
         conversaId = conversationId;
         registrarAtividade('Link de voz estabelecido', 'ok');
@@ -1054,6 +1573,7 @@ async function ligar() {
     botao.classList.add('ativo');
     $('btn-mudo').disabled = false;
     animar();
+    avisarJarvisDaIdentidade();
     if (comandoPendente) {
       conversa.sendUserMessage(comandoPendente);
       adicionarFala('renato', comandoPendente);
@@ -1112,6 +1632,7 @@ function abrirConfig() {
   $('cfg-chave').value = config.chave;
   $('cfg-n8n').value = config.n8n;
   $('cfg-agente').value = config.agente;
+  $('cfg-camera').checked = !!config.cameraAuto;
   $('resultado-teste').textContent = '';
   $('resultado-teste').className = 'resultado-teste';
   $('dialog-config').showModal();
@@ -1156,8 +1677,46 @@ function contextoDemo() {
       { nome: 'Estudo de IA', dias: 'ter,qui', horario: '20:00', hoje: false },
     ],
     agenda: [{ titulo: 'Reunião com cliente', inicio: em(15), local: 'Google Meet' }],
+    clima: { cidade: 'Curitiba, Paraná', agora: { temperatura: 21, descricao: 'nublado', codigo: 3 }, resumo: 'Curitiba: 21°C, nublado.' },
+    financas: { mes: 'outubro', total_gastos: 1840.5, total_entradas: 6000, saldo: 4159.5, categorias: [{ categoria: 'mercado', total: 720 }, { categoria: 'transporte', total: 410.5 }, { categoria: 'lazer', total: 380 }, { categoria: 'contas', total: 330 }] },
+    habitos: [
+      { nome: 'água', unidade: 'copos', meta: 8, feito_hoje: 5, completo: false, sequencia: 4 },
+      { nome: 'treino', unidade: 'vez', meta: 1, feito_hoje: 1, completo: true, sequencia: 12 },
+      { nome: 'leitura', unidade: 'páginas', meta: 20, feito_hoje: 0, completo: false, sequencia: 0 },
+    ],
+    aniversarios: [{ nome: 'Ana', relacao: 'irmã', data: '25/10', dias: 2, idade: 28 }, { nome: 'Mãe', relacao: 'mãe', data: '10/11', dias: 18 }],
     variaveis: variaveisPadrao(),
   };
+}
+
+// ---------- inicialização visual ----------
+async function boot() {
+  const caixa = $('boot');
+  let visto = false;
+  try { visto = sessionStorage.getItem('jarvis.boot') === '1'; } catch {}
+  if (visto || matchMedia('(prefers-reduced-motion: reduce)').matches) { caixa.remove(); return; }
+  const linhas = [
+    ['INICIALIZANDO J.A.R.V.I.S. v3', ''],
+    ['NÚCLEO DE VOZ ............', 'OK'],
+    ['CÉREBRO N8N ..............', 'OK'],
+    ['MÓDULO DE VISÃO ..........', 'OK'],
+    ['PROTOCOLOS BIOMÉTRICOS ...', 'OK'],
+    ['', ''],
+    ['BEM-VINDO, SENHOR.', ''],
+  ];
+  const pre = $('boot-texto');
+  let pular = false;
+  caixa.addEventListener('click', () => { pular = true; }, { once: true });
+  for (const [texto, ok] of linhas) {
+    if (pular) break;
+    const linha = el('div', {}, texto, ok ? el('span', { class: 'ok' }, ' ' + ok) : null);
+    pre.append(linha);
+    await new Promise((r) => setTimeout(r, 170));
+  }
+  await new Promise((r) => setTimeout(r, pular ? 0 : 350));
+  caixa.classList.add('saindo');
+  setTimeout(() => caixa.remove(), 650);
+  try { sessionStorage.setItem('jarvis.boot', '1'); } catch {}
 }
 
 // ---------- eventos ----------
@@ -1171,7 +1730,10 @@ $('btn-mudo').addEventListener('click', () => {
   $('btn-mudo').setAttribute('aria-label', mudo ? 'Ativar microfone' : 'Silenciar microfone');
 });
 
-$('btn-camera').addEventListener('click', () => (streamCamera ? desligarCamera() : ligarCamera()));
+for (const b of ['btn-camera', 'btn-camera-doca']) {
+  $(b).addEventListener('click', () => (streamCamera ? desligarCamera() : ligarCamera()));
+}
+$('btn-cadastrar').addEventListener('click', cadastrarRosto);
 
 $('btn-olhar').addEventListener('click', async () => {
   const descricao = await olhar('Descreva o que você vê agora.');
@@ -1197,10 +1759,11 @@ $('btn-config').addEventListener('click', abrirConfig);
 $('btn-testar').addEventListener('click', testarConfig);
 $('btn-cancelar-config').addEventListener('click', () => $('dialog-config').close());
 $('form-config').addEventListener('submit', () => {
-  salvarConfig({ chave: $('cfg-chave').value.trim(), n8n: $('cfg-n8n').value.trim(), agente: $('cfg-agente').value.trim() });
+  salvarConfig({ chave: $('cfg-chave').value.trim(), n8n: $('cfg-n8n').value.trim(), agente: $('cfg-agente').value.trim(), cameraAuto: $('cfg-camera').checked });
   registrarAtividade('Configuração salva', 'ok');
-  definirN8n('verificando');
+  definirChip('cerebro', 'wait', 'VERIFICANDO');
   carregarContexto();
+  pcStatus();
 });
 
 // se a aba fechar no meio da conversa, ainda tenta guardar a memória
@@ -1210,19 +1773,27 @@ addEventListener('pagehide', () => {
 
 function tick() {
   const agora = new Date();
-  $('relogio').textContent = agora.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: FUSO }).toUpperCase();
+  $('relogio-hora').textContent = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: FUSO });
+  $('relogio-data').textContent = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: FUSO });
 }
 tick();
 setInterval(tick, 1000);
 setInterval(() => { if (!conversa) carregarContexto(); }, 5 * 60 * 1000);
+setInterval(pcStatus, 30 * 1000);
 
 definirEstado('offline');
-if (!config.chave && !DEMO) {
-  definirN8n('sem chave');
-  abrirConfig();
-} else {
-  carregarContexto();
-}
+particulas();
+boot().then(async () => {
+  if (!config.chave && !DEMO) {
+    definirChip('cerebro', 'off', 'SEM CHAVE');
+    abrirConfig();
+    return;
+  }
+  await carregarContexto();
+  pcStatus();
+  if (config.cameraAuto && id.rosto) ligarCamera();
+  if (AUTO) ligar();
+});
 </script>
 
 </body>

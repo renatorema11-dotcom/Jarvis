@@ -4,8 +4,8 @@
     {
       "name": "jarvis",
       "runtimeExecutable": "py",
-      "runtimeArgs": ["-3", "-m", "http.server", "5500", "--bind", "127.0.0.1"],
-      "port": 5500
+      "runtimeArgs": ["-3", "-m", "http.server", "5510", "--bind", "127.0.0.1"],
+      "port": 5510
     }
   ]
 }
