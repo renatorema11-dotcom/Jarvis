@@ -28,8 +28,9 @@ from urllib.parse import quote
 
 # ---------------- CONFIG ----------------
 PORTA = 47801
-PAGINA = "https://jarvis-nutri-ali.vercel.app/?auto=1"   # aberta com as duas palmas
+PAGINA = "https://jarvis-tau-one-39.vercel.app/?auto=1"  # aberta com as duas palmas
 ORIGENS = {                                              # quem pode mandar comandos
+    "https://jarvis-tau-one-39.vercel.app",              # site público que o Renato usa
     "https://jarvis-nutri-ali.vercel.app",
     "http://localhost:5500", "http://127.0.0.1:5500",
     "http://localhost:5510", "http://127.0.0.1:5510",
@@ -145,7 +146,9 @@ class Servidor(BaseHTTPRequestHandler):
     server_version = "JarvisPC/1.0"
 
     def log_message(self, formato, *args):
-        print(f"   {self.address_string()} {formato % args}")
+        cabecalhos = getattr(self, "headers", None)
+        origem = cabecalhos.get("Origin", "-") if cabecalhos else "-"
+        print(f"   {time.strftime('%H:%M:%S')} {origem} {formato % args}")
 
     def origem_ok(self) -> bool:
         origem = self.headers.get("Origin")

@@ -32,7 +32,7 @@ Dados nas Data Tables `jarvis_memorias`, `jarvis_tarefas`, `jarvis_rotinas`, `ja
 
 ## Rodar a interface
 
-Site: https://jarvis-nutri-ali.vercel.app (deploy automático a cada push na `main`). Localmente:
+Site: https://jarvis-tau-one-39.vercel.app (público) e https://jarvis-nutri-ali.vercel.app (time nutri-ali, com login da Vercel); os dois fazem deploy automático a cada push na `main`. Localmente:
 
 ```bash
 py -3 -m http.server 5510
