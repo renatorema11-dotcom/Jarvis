@@ -736,6 +736,7 @@ const NOMES = {
   habitos_status: 'Vendo seus hábitos',
   ver_camera: 'Olhando pela câmera',
   controlar_pc: 'Controlando o PC',
+  navegador: 'Usando o navegador',
 };
 const ROTULOS = {
   offline: ['EM ESPERA', 'OFFLINE', 'TOQUE EM INICIAR PARA FALAR'],
@@ -1459,6 +1460,95 @@ async function controlarPc({ acao, alvo = '', valor = '' } = {}) {
   }
 }
 
+// ---------- navegador (tarefas no "Chrome do Jarvis", feitas pelo Jarvis PC) ----------
+const nav = { acompanhando: false, idTarefa: 0, ultimoPasso: 0, avisado: '' };
+const desfechoNavegador = (e) => `${e.id}:${e.fase}:${e.passo}`;
+
+async function chamarNavegador(corpo) {
+  const r = await fetch(`${PC_URL}/navegador`, {
+    method: corpo ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', 'x-jarvis-key': config.chave },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  return r.json();
+}
+
+function falaDoNavegador(e) {
+  if (e.fase === 'concluido') return `Pronto. ${e.resposta}`;
+  if (e.fase === 'falhou') return `Não consegui terminar no navegador: ${e.resposta}`;
+  if (e.fase === 'aguardando') {
+    return `O navegador parou e precisa da confirmação do Renato: ${e.pergunta} Pergunte a ele e chame navegador com acao "confirmar" se ele aceitar ou "cancelar" se não.`;
+  }
+  return `Estou fazendo no navegador agora (${e.pensamento || 'trabalhando'}). Diga ao Renato que já começou; o resultado chega sozinho quando terminar.`;
+}
+
+function mostrarPassosNavegador(e) {
+  if (e.id !== nav.idTarefa) {
+    nav.idTarefa = e.id;
+    nav.ultimoPasso = 0;
+  }
+  for (const p of e.passos || []) {
+    if (p.n <= nav.ultimoPasso) continue;
+    nav.ultimoPasso = p.n;
+    registrarAtividade(`Navegador: ${p.pensamento || `passo ${p.n}`}`, p.resultado === 'ok' ? '' : 'erro');
+  }
+}
+
+// segue a tarefa em segundo plano e conta o desfecho ao Jarvis (ou num aviso, se a conversa acabou)
+async function acompanharNavegador() {
+  if (nav.acompanhando) return;
+  nav.acompanhando = true;
+  try {
+    let e;
+    do {
+      await esperar(1500);
+      try {
+        e = await chamarNavegador();
+      } catch {
+        return;
+      }
+      mostrarPassosNavegador(e);
+    } while (e.fase === 'trabalhando');
+    if (e.fase === 'parado' || nav.avisado === desfechoNavegador(e)) return;
+    nav.avisado = desfechoNavegador(e);
+    const resumo = e.fase === 'aguardando' ? e.pergunta : e.resposta;
+    registrarAtividade(`Navegador: ${resumo}`, e.fase === 'falhou' ? 'erro' : 'ok');
+    if (conversa) conversa.sendUserMessage(`(aviso automático do navegador) ${falaDoNavegador(e)}`);
+    else avisar('NAVEGADOR', resumo);
+  } finally {
+    nav.acompanhando = false;
+  }
+}
+
+async function usarNavegador({ acao = 'tarefa', texto = '' } = {}) {
+  let e;
+  try {
+    e = await chamarNavegador({ acao, texto });
+  } catch {
+    definirChip('pc', '', 'OFFLINE');
+    return 'O Jarvis PC não está rodando, então não consigo usar o navegador. Peça para o Renato abrir o Jarvis PC.';
+  }
+  if (!e.ok) return e.mensagem || 'O navegador recusou o pedido.';
+  guardar('jarvis.pc', true);
+  definirChip('pc', 'ok', 'ONLINE');
+  if (acao === 'tarefa') registrarAtividade(`Navegador: ${texto}`, 'ok');
+  if (acao === 'parar') return 'Pedi para o navegador parar.';
+  // espera um pouco: tarefas curtas já voltam com a resposta
+  const limite = Date.now() + 12000;
+  while (e.fase === 'trabalhando' && Date.now() < limite) {
+    await esperar(1000);
+    try {
+      e = await chamarNavegador();
+    } catch {
+      break;
+    }
+    mostrarPassosNavegador(e);
+  }
+  if (e.fase === 'trabalhando') acompanharNavegador();
+  else nav.avisado = desfechoNavegador(e);
+  return falaDoNavegador(e);
+}
+
 // ---------- spotify ----------
 const LINK_SPOTIFY = /^https:\/\/open\.spotify\.com\/(playlist|album|artist|track)\/([A-Za-z0-9]+)/;
 
@@ -1569,6 +1659,7 @@ async function ligar() {
       clientTools: {
         ver_camera: ({ pergunta } = {}) => olhar(pergunta),
         controlar_pc: controlarPc,
+        navegador: usarNavegador,
       },
       onConnect: ({ conversationId }) => {
         conversaId = conversationId;

@@ -5,7 +5,8 @@ Roda um servidor pequeno só em 127.0.0.1:47801. A página do Jarvis chama esse
 servidor quando o agente usa a ferramenta controlar_pc: abrir programas e sites,
 pesquisar, volume, mídia e bloquear a tela. Só aceita pedidos com a chave do
 cérebro e vindos da página do Jarvis, e só executa ações de uma lista fixa —
-nunca um comando livre.
+nunca um comando livre. A ferramenta navegador (/navegador) faz tarefas numa
+janela própria do Chrome — veja navegador.py.
 
 Opcional: com numpy e sounddevice instalados (o venv do OpenJarvis tem), fica
 ouvindo DUAS palmas e abre a página do Jarvis já iniciando a conversa.
@@ -25,6 +26,8 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote
+
+from navegador import Navegador
 
 # ---------------- CONFIG ----------------
 PORTA = 47801
@@ -84,6 +87,7 @@ def ler_chave() -> str:
 
 
 CHAVE = ler_chave()
+NAVEGADOR = Navegador(CHAVE)
 
 
 def normalizar(texto: str) -> str:
@@ -188,13 +192,16 @@ class Servidor(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path != "/status":
+        if self.path not in ("/status", "/navegador"):
             return self.responder(404, {"ok": False})
-        if self.autorizado():
-            self.responder(200, {"ok": True, "versao": 1, "apps": sorted(APPS), "palmas": PALMAS_ATIVAS})
+        if not self.autorizado():
+            return
+        if self.path == "/navegador":
+            return self.responder(200, NAVEGADOR.comando("status"))
+        self.responder(200, {"ok": True, "versao": 2, "apps": sorted(APPS), "palmas": PALMAS_ATIVAS})
 
     def do_POST(self):
-        if self.path != "/acao":
+        if self.path not in ("/acao", "/navegador"):
             return self.responder(404, {"ok": False})
         if not self.autorizado():
             return
@@ -202,6 +209,8 @@ class Servidor(BaseHTTPRequestHandler):
         try:
             tamanho = min(int(self.headers.get("Content-Length", 0)), 4096)
             pedido = json.loads(self.rfile.read(tamanho) or b"{}")
+            if self.path == "/navegador":
+                return self.responder(200, NAVEGADOR.comando(pedido.get("acao", ""), pedido.get("texto", "")))
             resultado = executar(pedido.get("acao", ""), pedido.get("alvo", ""), pedido.get("valor", ""))
         except Exception as erro:
             resultado = {"ok": False, "mensagem": f"Falhou: {erro}"}

@@ -27,6 +27,7 @@ Workflows no n8n:
 | Jarvis — Spotify (tocar) | Acha a playlist, escolhe o aparelho, toca e confere |
 | Jarvis — Internet | Pesquisa na web, clima (Open-Meteo) e notícias (Google Notícias) |
 | Jarvis — Cálculos | Totais de finanças, sequência de hábitos e próximos aniversários |
+| Jarvis — Navegador (cérebro) | Escolhe a próxima ação do navegador a cada passo (Groq) |
 
 Dados nas Data Tables `jarvis_memorias`, `jarvis_tarefas`, `jarvis_rotinas`, `jarvis_conversas`, `jarvis_perfil`, `jarvis_financas`, `jarvis_pessoas`, `jarvis_habitos` e `jarvis_habitos_registros`.
 
@@ -45,3 +46,13 @@ Na engrenagem, cole a chave do cérebro (está em `.jarvis-chave.local.txt`, que
 ## Jarvis PC (controle do computador e duas palmas)
 
 Dê dois cliques em `pc/iniciar-jarvis-pc.cmd`. Ele usa o Python do OpenJarvis (que tem `numpy` e `sounddevice` para as palmas) ou o `py -3` do sistema. O Jarvis passa a abrir programas e sites, pesquisar, mexer no volume e na mídia e bloquear a tela, e duas palmas abrem a conversa. O agente só aceita a chave do cérebro, só responde ao site do Jarvis e só executa ações de uma lista fixa. Na primeira vez, o Chrome pergunta se o site pode acessar o computador local: permita. O botão TESTAR PC, na engrenagem, mostra se o Jarvis PC está rodando e aceitando a chave.
+
+### Navegador (tarefas em sites)
+
+Peça coisas como "procura um fone bluetooth no Mercado Livre e me fala os três primeiros". A ferramenta `navegador` do agente pede ao Jarvis PC, que abre uma janela própria do Chrome (o "Chrome do Jarvis", perfil em `~/jarvis/chrome-jarvis`) e faz a tarefa passo a passo (`pc/navegador.py` com Playwright). A cada passo o workflow **Jarvis — Navegador (cérebro)** no n8n escolhe a próxima ação (hoje com o Groq; para trocar pelo Claude, mude só o nó *Pensar*). Antes de comprar, enviar, publicar ou apagar, ele para e pergunta; nunca digita senhas nem cartões. Para sites com login, entre uma vez nessa janela do Chrome do Jarvis.
+
+Precisa do Playwright no Python do Jarvis PC:
+
+```bash
+uv pip install --python "%USERPROFILE%\jarvis\OpenJarvis\.venv\Scripts\python.exe" playwright
+```
