@@ -1,10 +1,7 @@
 @echo off
 rem Liga o Jarvis PC: o Jarvis passa a controlar o computador e as duas palmas abrem a conversa.
-rem Usa o Python do OpenJarvis (que ja tem numpy e sounddevice para as palmas) se existir.
+rem Abre uma janela minimizada "Jarvis PC"; feche essa janela para desligar.
 cd /d "%~dp0"
-set "PY=%USERPROFILE%\jarvis\OpenJarvis\.venv\Scripts\pythonw.exe"
-if exist "%PY%" (
-  start "" "%PY%" "jarvis-pc.py"
-) else (
-  start "" pyw -3 "jarvis-pc.py"
-)
+set "PY=%USERPROFILE%\jarvis\OpenJarvis\.venv\Scripts\python.exe"
+if not exist "%PY%" set "PY=py"
+if "%PY%"=="py" (start "Jarvis PC" /min py -3 -u jarvis-pc.py) else (start "Jarvis PC" /min "%PY%" -u jarvis-pc.py)

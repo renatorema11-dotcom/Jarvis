@@ -396,7 +396,7 @@
     border:1px solid var(--line); border-radius:3px; font-family:var(--body); font-size:15px; padding:10px 12px;
   }
   dialog .linha-check{ display:flex; gap:10px; align-items:center; text-transform:none; letter-spacing:0.5px; font-family:var(--body); font-size:14px; color:var(--text-mid); }
-  .dialog-acoes{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+  .dialog-acoes{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; margin-top:20px; }
   .dialog-acoes .btn-sec{ flex:0 0 auto; min-width:0; padding:10px 16px; }
   .btn-pri{ font-family:var(--head); font-size:9.5px; letter-spacing:2px; font-weight:700; background:var(--cyan); color:var(--bg-void); border:none; border-radius:3px; padding:10px 18px; cursor:pointer; }
   .resultado-teste{ font-size:13px; margin-top:12px; min-height:1.2em; }
@@ -509,7 +509,7 @@
             </dl>
             <div class="acoes">
               <button class="btn-sec" id="btn-camera" type="button">LIGAR SENSOR</button>
-              <button class="btn-sec" id="btn-cadastrar" type="button" disabled>CADASTRAR ROSTO</button>
+              <button class="btn-sec" id="btn-cadastrar" type="button">CADASTRAR ROSTO</button>
               <button class="btn-sec" id="btn-olhar" type="button" disabled>ANALISAR CENA</button>
             </div>
             <p class="descricao-visao" id="visao-descricao"></p>
@@ -668,6 +668,7 @@
       <div class="resultado-teste" id="resultado-teste" role="status"></div>
       <div class="dialog-acoes">
         <button class="btn-sec" type="button" id="btn-testar">TESTAR</button>
+        <button class="btn-sec" type="button" id="btn-testar-pc">TESTAR PC</button>
         <button class="btn-sec" type="button" id="btn-cancelar-config">FECHAR</button>
         <button class="btn-pri" type="submit" value="salvar">SALVAR</button>
       </div>
@@ -766,6 +767,7 @@ const id = {
   carregando: null,
   rosto: lerRosto(),
   rodando: false,
+  calibrado: false,
   ultimo: null,
   acertosSeguidos: 0,
   errosSeguidos: 0,
@@ -1117,7 +1119,6 @@ async function ligarCamera() {
   for (const b of ['btn-camera', 'btn-camera-doca']) $(b).setAttribute('aria-pressed', 'true');
   $('btn-camera').textContent = 'DESLIGAR SENSOR';
   $('btn-olhar').disabled = false;
-  $('btn-cadastrar').disabled = false;
   definirChip('visao', 'on', 'ATIVA');
   registrarAtividade('Sensor óptico ligado', 'ok');
   iniciarReconhecimento();
@@ -1139,7 +1140,6 @@ function desligarCamera() {
   for (const b of ['btn-camera', 'btn-camera-doca']) $(b).setAttribute('aria-pressed', 'false');
   $('btn-camera').textContent = 'LIGAR SENSOR';
   $('btn-olhar').disabled = true;
-  $('btn-cadastrar').disabled = true;
   definirChip('visao', '', 'DESLIGADA');
   atualizarFicha({ sujeito: '—', confianca: null, expressao: '—', status: 'AGUARDANDO' });
   $('id-estado-curto').textContent = 'OFFLINE';
@@ -1248,11 +1248,13 @@ async function analisarQuadro() {
   const faceapi = id.faceapi;
   const video = $('video');
   if (!video.videoWidth) return;
+  // no cadastro aceitamos detecções um pouco menos firmes para pegar amostras mais rápido
   const r = await faceapi
-    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
+    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: id.cadastro ? 0.35 : 0.45 }))
     .withFaceLandmarks(true)
     .withFaceExpressions()
     .withFaceDescriptor();
+  id.calibrado = true;
 
   const canvas = $('overlay');
   if (canvas.width !== video.videoWidth) { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
@@ -1372,25 +1374,45 @@ function avisarJarvisDaIdentidade() {
   adicionarFala('sistema', `Renato identificado · expressão ${id.ultimo.expressao}`);
 }
 
+const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
 async function cadastrarRosto() {
-  if (!streamCamera) await ligarCamera();
+  if (id.cadastro) return;
+  const botao = $('btn-cadastrar');
+  const rotuloBotao = () => { botao.textContent = id.rosto ? 'RECADASTRAR' : 'CADASTRAR ROSTO'; };
+  if (!streamCamera && !(await ligarCamera())) {
+    avisar('CADASTRO FALHOU', 'Permita o uso da câmera no navegador e tente de novo.');
+    return;
+  }
+  botao.disabled = true;
   try {
     await carregarFaceApi();
   } catch {
+    botao.disabled = false;
+    avisar('CADASTRO FALHOU', 'O módulo biométrico não carregou. Confira a internet e recarregue a página.');
     return;
   }
+  // a primeira leitura aquece a placa de vídeo; só começamos a contar depois dela
+  if (!id.calibrado) {
+    botao.textContent = 'CALIBRANDO…';
+    avisar('CADASTRO BIOMÉTRICO', 'Calibrando o sensor. Na primeira vez pode levar até um minuto.');
+    const inicioCalibracao = Date.now();
+    while (!id.calibrado && Date.now() - inicioCalibracao < 120000) await esperar(300);
+  }
   id.cadastro = { amostras: [] };
-  $('btn-cadastrar').disabled = true;
   avisar('CADASTRO BIOMÉTRICO', 'Olhe para a câmera e mexa levemente a cabeça.');
   const inicio = Date.now();
-  while (id.cadastro.amostras.length < 10 && Date.now() - inicio < 15000) {
-    await new Promise((ok) => setTimeout(ok, 300));
+  while (id.cadastro.amostras.length < 10 && Date.now() - inicio < 25000) {
+    botao.textContent = `CADASTRANDO ${id.cadastro.amostras.length * 10}%`;
+    await esperar(250);
   }
   const amostras = id.cadastro.amostras;
   id.cadastro = null;
-  $('btn-cadastrar').disabled = false;
+  botao.disabled = false;
   if (amostras.length < 5) {
-    atualizarFicha({ status: 'CADASTRO FALHOU: ROSTO NÃO VISTO', classeStatus: 'alerta' });
+    rotuloBotao();
+    avisar('CADASTRO FALHOU', 'Não consegui ver seu rosto direito. Fique de frente para a câmera, com o rosto iluminado, e tente de novo.');
+    registrarAtividade(`Cadastro do rosto falhou: só ${amostras.length} amostras`, 'erro');
     return;
   }
   const media = new Array(128).fill(0);
@@ -1399,7 +1421,7 @@ async function cadastrarRosto() {
   guardar('jarvis.rosto', media);
   id.acertosSeguidos = 0;
   id.confirmado = false;
-  $('btn-cadastrar').textContent = 'RECADASTRAR';
+  rotuloBotao();
   registrarAtividade(`Rosto cadastrado com ${amostras.length} amostras (salvo só neste navegador)`, 'ok');
   avisar('CADASTRO CONCLUÍDO', 'Padrão facial salvo neste navegador.');
 }
@@ -1658,6 +1680,33 @@ async function testarConfig() {
   }
 }
 
+// testar o PC libera a consulta ao agente local (o Chrome pode pedir acesso à rede local)
+async function testarPc() {
+  const saida = $('resultado-teste');
+  saida.className = 'resultado-teste';
+  saida.textContent = 'Procurando o Jarvis PC…';
+  guardar('jarvis.pc', true);
+  let dados;
+  try {
+    const r = await fetch(`${PC_URL}/status`, { headers: { 'x-jarvis-key': $('cfg-chave').value.trim() } });
+    dados = await r.json();
+  } catch {
+    definirChip('pc', '', 'OFFLINE');
+    saida.textContent = 'O Jarvis PC não respondeu. Dê dois cliques em pc\\iniciar-jarvis-pc.cmd e, se o Chrome perguntar, permita o acesso aos dispositivos da rede local.';
+    saida.classList.add('erro');
+    return;
+  }
+  if (!dados.ok) {
+    definirChip('pc', 'off', 'RECUSADO');
+    saida.textContent = `O Jarvis PC está rodando, mas recusou (${(dados.mensagem || 'sem motivo').replace(/\.$/, '')}). A chave aqui precisa ser a mesma do arquivo .jarvis-chave.local.txt.`;
+    saida.classList.add('erro');
+    return;
+  }
+  definirChip('pc', 'ok', 'ONLINE');
+  saida.textContent = `Jarvis PC conectado. Palmas ${dados.palmas ? 'ligadas' : 'desligadas'}; abre ${dados.apps.length} programas.`;
+  saida.classList.add('ok');
+}
+
 function contextoDemo() {
   const hoje = new Date();
   const em = (h, dias = 0) => { const d = new Date(hoje); d.setDate(d.getDate() + dias); d.setHours(h, 0, 0, 0); return d.toISOString(); };
@@ -1758,6 +1807,7 @@ $('form-comando').addEventListener('submit', (evento) => {
 
 $('btn-config').addEventListener('click', abrirConfig);
 $('btn-testar').addEventListener('click', testarConfig);
+$('btn-testar-pc').addEventListener('click', testarPc);
 $('btn-cancelar-config').addEventListener('click', () => $('dialog-config').close());
 $('form-config').addEventListener('submit', () => {
   salvarConfig({ chave: $('cfg-chave').value.trim(), n8n: $('cfg-n8n').value.trim(), agente: $('cfg-agente').value.trim(), cameraAuto: $('cfg-camera').checked });

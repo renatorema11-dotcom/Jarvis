@@ -44,4 +44,4 @@ Na engrenagem, cole a chave do cérebro (está em `.jarvis-chave.local.txt`, que
 
 ## Jarvis PC (controle do computador e duas palmas)
 
-Dê dois cliques em `pc/iniciar-jarvis-pc.cmd`. Ele usa o Python do OpenJarvis (que tem `numpy` e `sounddevice` para as palmas) ou o `py -3` do sistema. O Jarvis passa a abrir programas e sites, pesquisar, mexer no volume e na mídia e bloquear a tela, e duas palmas abrem a conversa. O agente só aceita a chave do cérebro, só responde ao site do Jarvis e só executa ações de uma lista fixa. Na primeira vez, o Chrome pergunta se o site pode acessar o computador local: permita.
+Dê dois cliques em `pc/iniciar-jarvis-pc.cmd`. Ele usa o Python do OpenJarvis (que tem `numpy` e `sounddevice` para as palmas) ou o `py -3` do sistema. O Jarvis passa a abrir programas e sites, pesquisar, mexer no volume e na mídia e bloquear a tela, e duas palmas abrem a conversa. O agente só aceita a chave do cérebro, só responde ao site do Jarvis e só executa ações de uma lista fixa. Na primeira vez, o Chrome pergunta se o site pode acessar o computador local: permita. O botão TESTAR PC, na engrenagem, mostra se o Jarvis PC está rodando e aceitando a chave.

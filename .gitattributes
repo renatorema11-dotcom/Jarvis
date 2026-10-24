@@ -1,0 +1,3 @@
+# scripts do Windows precisam de CRLF para o cmd.exe ler blocos if/else
+*.cmd text eol=crlf
+*.bat text eol=crlf
