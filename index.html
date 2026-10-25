@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>J.A.R.V.I.S. — Console</title>
+<!-- three.js para o laboratório holográfico (holo.js), carregado só quando ele abre -->
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/" } }
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -689,6 +693,9 @@
           <button class="icon-btn" id="btn-camera-doca" type="button" aria-label="Ligar sensor óptico" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
           </button>
+          <button class="icon-btn" id="btn-holo" type="button" aria-label="Abrir laboratório holográfico" title="Laboratório holográfico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v8l-7 4-7-4V6z"/><path d="M12 10l7-4M12 10L5 6M12 10v8"/><path d="M4 21.5h16"/></svg>
+          </button>
         </div>
 
         <form class="comando" id="form-comando" autocomplete="off">
@@ -822,6 +829,8 @@
     </div>
   </dialog>
 
+  <section id="holo" hidden aria-label="Laboratório holográfico"></section>
+
 <script type="module">
 import { Conversation } from 'https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.26.0/+esm';
 
@@ -879,6 +888,7 @@ const NOMES = {
   controlar_pc: 'Controlando o PC',
   navegador: 'Usando o navegador',
   dispositivos: 'Procurando dispositivos',
+  holograma: 'Projetando holograma',
 };
 const ROTULOS = {
   offline: ['EM ESPERA', 'OFFLINE', 'TOQUE EM INICIAR PARA FALAR'],
@@ -1378,6 +1388,11 @@ async function iniciarReconhecimento() {
   $('btn-cadastrar').textContent = id.rosto ? 'RECADASTRAR' : 'CADASTRAR ROSTO';
   const ciclo = async () => {
     if (!id.rodando || !streamCamera) return;
+    // no laboratório a placa de vídeo fica com a projeção e o rastreamento das mãos
+    if (holoAberto) {
+      setTimeout(ciclo, 1000);
+      return;
+    }
     try {
       await analisarQuadro();
     } catch (erro) {
@@ -2163,6 +2178,56 @@ async function usarDispositivos({ acao = 'procurar', alvo = '' } = {}) {
   return conectarDispositivo(escolhido);
 }
 
+// ---------- laboratório holográfico (holo.js, carregado só quando abre) ----------
+let holo = null;
+let holoAberto = false;
+
+async function abrirHolo() {
+  if (holoAberto) return holo.estadoAtual();
+  holoAberto = true;
+  try {
+    holo = holo || await import('./holo.js');
+    const estado = await holo.abrir({ raiz: $('holo'), stream: streamCamera, aoVoltar: fecharHolo });
+    registrarAtividade('Laboratório holográfico aberto', 'ok');
+    return estado;
+  } catch (erro) {
+    holoAberto = false;
+    $('holo').hidden = true;
+    registrarAtividade(`Laboratório holográfico falhou: ${erro.message}`, 'erro');
+    avisar('LABORATÓRIO', 'Não consegui abrir o laboratório holográfico. Confira a internet e tente de novo.');
+    throw erro;
+  }
+}
+
+function fecharHolo() {
+  if (!holoAberto) return;
+  holoAberto = false;
+  holo?.fechar();
+  if (location.hash === '#holo') history.replaceState(null, '', location.pathname + location.search);
+  registrarAtividade('De volta ao console', 'ok');
+}
+
+// ferramenta de cliente "holograma": o Jarvis abre o laboratório e troca as projeções pela voz
+async function usarHolograma({ acao = 'abrir', forma = '' } = {}) {
+  if (acao === 'fechar') {
+    fecharHolo();
+    return 'Voltei para o console.';
+  }
+  try {
+    await abrirHolo();
+  } catch (erro) {
+    return `Não consegui abrir o laboratório holográfico: ${erro.message}`;
+  }
+  if (forma) return holo.mostrar(forma);
+  if (acao === 'desmontar') return holo.desmontar(true);
+  if (acao === 'montar') return holo.desmontar(false);
+  if (acao === 'girar') return holo.girar(90);
+  if (acao === 'centralizar') return holo.centralizar();
+  const e = holo.estadoAtual();
+  return `Laboratório holográfico aberto, exibindo ${e.forma}. Projeções disponíveis: ${e.formas.join(', ')}. `
+    + 'O Renato controla com as mãos: punho gira, pinça dá zoom, mão aberta desmonta, duas mãos ampliam e deslizar troca de projeção.';
+}
+
 // ---------- spotify ----------
 const LINK_SPOTIFY = /^https:\/\/open\.spotify\.com\/(playlist|album|artist|track)\/([A-Za-z0-9]+)/;
 
@@ -2340,6 +2405,7 @@ async function ligar() {
         controlar_pc: controlarPc,
         navegador: usarNavegador,
         dispositivos: usarDispositivos,
+        holograma: usarHolograma,
       },
       onConnect: ({ conversationId }) => {
         conversaId = conversationId;
@@ -2587,6 +2653,10 @@ $('btn-testar').addEventListener('click', testarConfig);
 $('btn-testar-pc').addEventListener('click', testarPc);
 $('btn-ouvir-musica').addEventListener('click', ouvirMusicaEscolhida);
 $('btn-varrer').addEventListener('click', procurarDispositivos);
+$('btn-holo').addEventListener('click', () => {
+  history.replaceState(null, '', '#holo');
+  abrirHolo().catch(() => {});
+});
 $('btn-cancelar-config').addEventListener('click', () => $('dialog-config').close());
 $('form-config').addEventListener('submit', () => {
   salvarConfig({
@@ -2640,6 +2710,7 @@ boot().then(async () => {
   pcStatus();
   if (config.cameraAuto && id.rosto) ligarCamera();
   if (AUTO) ligar();
+  if (location.hash === '#holo') abrirHolo().catch(() => {});
 });
 </script>
 

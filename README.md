@@ -49,6 +49,10 @@ Na engrenagem, cole a chave do cérebro (está em `.jarvis-chave.local.txt`, que
 
 Dê dois cliques em `pc/iniciar-jarvis-pc.cmd`. Ele usa o Python do OpenJarvis (que tem `numpy` e `sounddevice` para as palmas) ou o `py -3` do sistema. O Jarvis passa a abrir programas e sites, pesquisar, mexer no volume e na mídia e bloquear a tela, e duas palmas abrem a conversa. O agente só aceita a chave do cérebro, só responde ao site do Jarvis e só executa ações de uma lista fixa. Na primeira vez, o Chrome pergunta se o site pode acessar o computador local: permita. O botão TESTAR PC, na engrenagem, mostra se o Jarvis PC está rodando e aceitando a chave.
 
+### Laboratório holográfico
+
+O botão do cubo na doca (ou `#holo` no endereço, ou "Jarvis, mostra a Terra") abre uma tela inteira de projeções 3D em partículas sobre uma mesa de projeção: Terra (continentes de verdade e marcador em Maringá), Saturno, Reator Arc, Átomo, DNA e Cidade, que se transformam uma na outra. Você controla com as mãos pela câmera (MediaPipe): punho fechado gira, pinça dá zoom, mão aberta desmonta e as partículas seguem a mão, duas mãos ampliam e um deslize rápido troca a projeção. Também funciona com mouse (arrastar, rodinha, duplo clique), teclado (setas, espaço, Esc) e pela ferramenta `holograma` do agente. Tudo fica em `holo.js`, carregado só quando o laboratório abre (three.js com bloom).
+
 ### Dispositivos (fones, celulares, TVs)
 
 O painel DISPOSITIVOS (botão VARRER) e a ferramenta `dispositivos` do agente pedem ao Jarvis PC uma varredura de uns 8 segundos (`pc/dispositivos.py`): Bluetooth pareado e por perto pelo próprio Windows, telas que aceitam transmissão (Wi-Fi Direct/Miracast) e a rede de casa (SSDP/UPnP). Conectar pareia um Bluetooth novo, abre o painel rápido do Bluetooth para um já pareado (o Windows não deixa programas ligarem o som de um fone sozinhos), abre o Transmitir (Win+K) para a TV e o Vincular ao Celular para um celular. Precisa dos pacotes `winrt-Windows.Devices.Enumeration` e `winrt-Windows.Foundation` no Python do Jarvis PC.
