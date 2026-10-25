@@ -24,7 +24,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const VISAO = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';
 const MODELO_MAOS = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const TOTAL = 26000;              // toda projeção usa o mesmo tanto de partículas, para uma virar a outra
-const MARCADOR = { nome: 'Maringá · PR', lat: -23.42, lon: -51.93 };
+const MARCADOR = { nome: 'Campo Mourão · PR', lat: -24.05, lon: -52.38 };
 // ----------------------------------------
 
 const COR = {

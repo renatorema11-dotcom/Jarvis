@@ -51,7 +51,7 @@ Dê dois cliques em `pc/iniciar-jarvis-pc.cmd`. Ele usa o Python do OpenJarvis (
 
 ### Laboratório holográfico
 
-O botão do cubo na doca (ou `#holo` no endereço, ou "Jarvis, mostra a Terra") abre uma tela inteira de projeções 3D em partículas sobre uma mesa de projeção: Terra (continentes de verdade e marcador em Maringá), Saturno, Reator Arc, Átomo, DNA e Cidade, que se transformam uma na outra. Você controla com as mãos pela câmera (MediaPipe): punho fechado gira, pinça dá zoom, mão aberta desmonta e as partículas seguem a mão, duas mãos ampliam e um deslize rápido troca a projeção. Também funciona com mouse (arrastar, rodinha, duplo clique), teclado (setas, espaço, Esc) e pela ferramenta `holograma` do agente. Tudo fica em `holo.js`, carregado só quando o laboratório abre (three.js com bloom).
+O botão do cubo na doca (ou `#holo` no endereço, ou "Jarvis, mostra a Terra") abre uma tela inteira de projeções 3D em partículas sobre uma mesa de projeção: Terra (continentes de verdade e marcador em Campo Mourão), Saturno, Reator Arc, Átomo, DNA e Cidade, que se transformam uma na outra. Você controla com as mãos pela câmera (MediaPipe): punho fechado gira, pinça dá zoom, mão aberta desmonta e as partículas seguem a mão, duas mãos ampliam e um deslize rápido troca a projeção. Também funciona com mouse (arrastar, rodinha, duplo clique), teclado (setas, espaço, Esc) e pela ferramenta `holograma` do agente. Tudo fica em `holo.js`, carregado só quando o laboratório abre (three.js com bloom).
 
 ### Dispositivos (fones, celulares, TVs)
 
