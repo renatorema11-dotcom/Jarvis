@@ -1608,7 +1608,8 @@ async function tocarMusicaDeInicio({ busca = config.musica, tipo = config.musica
   registrarAtividade(`Música de inicialização: ${busca}`, 'ferramenta');
   let r = await pedirMusica({ acao: 'tocar', busca, tipo, aparelho: 'pc' });
   // Spotify fechado no PC: o Jarvis PC abre o app e tentamos de novo enquanto ele conecta
-  if (r.motivo === 'sem_aparelho' && ler('jarvis.pc', false)) {
+  const pcAbre = r.motivo === 'sem_aparelho' && ler('jarvis.pc', false);
+  if (pcAbre) {
     await controlarPc({ acao: 'abrir_app', alvo: 'spotify' });
     for (let tentativa = 0; tentativa < 4 && r.motivo === 'sem_aparelho'; tentativa++) {
       await esperar(4000);
@@ -1623,7 +1624,9 @@ async function tocarMusicaDeInicio({ busca = config.musica, tipo = config.musica
     return { ok: true, mensagem: `Tocando "${r.tocando_agora || r.nome}" no ${r.aparelho}.` };
   }
   if (r.motivo === 'sem_aparelho') {
-    const mensagem = 'O Spotify do PC está fechado. Abra o app do Spotify no computador (ou ligue o Jarvis PC, que abre sozinho) e tente de novo.';
+    const mensagem = pcAbre
+      ? 'Pedi para o Jarvis PC abrir o Spotify, mas o computador não apareceu no Spotify. Confira se o app do Spotify está instalado e com a sua conta conectada.'
+      : 'O Spotify do PC está fechado. Abra o app do Spotify no computador (ou ligue o Jarvis PC, que abre sozinho) e tente de novo.';
     mostrarSpotify({ nome: busca, url: r.url, alerta: true, detalhe: mensagem });
     registrarAtividade('Música de inicialização: Spotify do PC fechado', 'erro');
     return { ok: false, mensagem };
