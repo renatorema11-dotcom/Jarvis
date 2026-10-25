@@ -207,20 +207,30 @@
   .scanner video, .scanner canvas{
     position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1);
   }
-  .scanner video{ filter: saturate(0.75) contrast(1.05) brightness(0.95); }
+  .scanner video{ filter: saturate(0.55) contrast(1.12) brightness(0.9); }
+  /* tom de holograma e vinheta por cima da câmera */
+  .scanner::after{
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:1;
+    background:
+      radial-gradient(ellipse at 50% 48%, transparent 52%, rgba(2,8,12,0.72) 100%),
+      linear-gradient(180deg, rgba(77,232,240,0.05), rgba(77,232,240,0.02)),
+      repeating-linear-gradient(to bottom, rgba(143,243,247,0.035) 0 1px, transparent 1px 3px);
+  }
+  .scanner canvas{ z-index:2; }
   .scanner .grade-scan{
     position:absolute; inset:0; pointer-events:none;
     background:
-      linear-gradient(rgba(77,232,240,0.06) 1px, transparent 1px) 0 0 / 100% 22px,
-      linear-gradient(90deg, rgba(77,232,240,0.06) 1px, transparent 1px) 0 0 / 22px 100%;
+      linear-gradient(rgba(77,232,240,0.04) 1px, transparent 1px) 0 0 / 100% 22px,
+      linear-gradient(90deg, rgba(77,232,240,0.04) 1px, transparent 1px) 0 0 / 22px 100%;
   }
   .scanner .linha-scan{
-    position:absolute; left:0; right:0; height:2px; top:0; pointer-events:none;
+    position:absolute; left:0; right:0; height:2px; top:0; pointer-events:none; z-index:2;
     background: linear-gradient(90deg, transparent, var(--cyan), transparent);
     box-shadow: 0 0 14px var(--cyan-glow);
-    animation: varrer 2.6s linear infinite;
-    opacity:0.8;
+    animation: varrer 3.4s linear infinite;
+    opacity:0.35;
   }
+  .scanner .mira, .scanner .aviso{ z-index:3; }
   @keyframes varrer{ 0%{ top:0; } 100%{ top:100%; } }
   .scanner .mira{ position:absolute; inset:10px; pointer-events:none;
     background:
@@ -246,10 +256,58 @@
   .ficha dd{ margin:0; color:var(--text-hi); text-align:right; overflow-wrap:anywhere; }
   .ficha dd.ok{ color:var(--green); }
   .ficha dd.alerta{ color:var(--amber); }
-  .barra-conf{ grid-column:1 / -1; height:4px; background:rgba(77,232,240,0.1); border-radius:2px; overflow:hidden; margin-top:2px; }
-  .barra-conf i{ display:block; height:100%; width:0; background:linear-gradient(90deg, var(--cyan), var(--green)); transition:width .4s; }
+  /* barra em segmentos, como um medidor de painel */
+  .barra-conf{
+    grid-column:1 / -1; height:6px; margin-top:3px; position:relative;
+    background: repeating-linear-gradient(90deg, rgba(77,232,240,0.12) 0 8px, transparent 8px 10px);
+  }
+  .barra-conf i{
+    display:block; height:100%; width:0; transition:width .4s;
+    background: linear-gradient(90deg, var(--cyan), var(--green));
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 10px);
+            mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 10px);
+    filter: drop-shadow(0 0 4px var(--cyan-glow));
+  }
 
   .acoes{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+
+  /* ---------- dispositivos ---------- */
+  .radar-dispositivos{ display:flex; align-items:center; gap:12px; margin-bottom:10px; font-family:var(--mono); font-size:10.5px; letter-spacing:1.5px; color:var(--cyan); }
+  .radar-disco{
+    position:relative; width:54px; height:54px; border-radius:50%; flex-shrink:0; overflow:hidden;
+    border:1px solid var(--line-hi);
+    background: radial-gradient(circle, transparent 31%, rgba(77,232,240,0.12) 32%, transparent 34%, transparent 63%, rgba(77,232,240,0.12) 64%, transparent 66%);
+  }
+  .radar-disco b{ position:absolute; inset:0; border-radius:50%; background:conic-gradient(from 0deg, rgba(77,232,240,0.5), transparent 26%); animation: girar 1.4s linear infinite; }
+  .radar-disco i{ position:absolute; inset:45%; border-radius:50%; border:1px solid var(--cyan); animation: radar-onda 1.8s ease-out infinite; }
+  .radar-disco i:nth-child(2){ animation-delay:.9s; }
+  @keyframes radar-onda{ from{ inset:45%; opacity:1; } to{ inset:-6%; opacity:0; } }
+  .lista-dispositivos{ list-style:none; margin:0; padding:0 4px 0 0; display:flex; flex-direction:column; gap:7px; max-height:280px; }
+  .disp{
+    --cor-disp: var(--cyan-dim);
+    position:relative; display:grid; grid-template-columns:30px minmax(0,1fr) auto auto; align-items:center; gap:9px;
+    padding:7px 8px 7px 10px; border:1px solid var(--line); border-radius:3px; background:rgba(3,10,14,0.45);
+    animation: entrar .4s ease both;
+  }
+  .disp::before{ content:""; position:absolute; left:-1px; top:7px; bottom:7px; width:2px; background:var(--cor-disp); box-shadow:0 0 8px var(--cor-disp); }
+  .disp[data-estado="conectado"]{ --cor-disp: var(--green); }
+  .disp[data-estado="disponível"]{ --cor-disp: var(--cyan); }
+  .disp[data-estado="na rede"]{ --cor-disp: var(--violet); }
+  .disp-icone{ width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; color:var(--cor-disp); }
+  .disp[data-estado="pareado"] .disp-icone{ color:var(--cyan); }
+  .disp-icone svg{ width:16px; height:16px; }
+  .disp-texto b{ display:block; font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .disp-texto small{ display:block; font-family:var(--mono); font-size:10px; letter-spacing:1px; color:var(--text-lo); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .disp-sinal{ display:flex; align-items:flex-end; gap:2px; height:14px; }
+  .disp-sinal i{ width:3px; background:rgba(77,232,240,0.18); border-radius:1px; }
+  .disp-sinal i:nth-child(1){ height:4px; } .disp-sinal i:nth-child(2){ height:7px; } .disp-sinal i:nth-child(3){ height:10px; } .disp-sinal i:nth-child(4){ height:13px; }
+  .disp-sinal i.on{ background:var(--cyan); box-shadow:0 0 4px var(--cyan-glow); }
+  .disp-acao{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:1.5px; padding:5px 8px; border-radius:2px; cursor:pointer;
+    border:1px solid var(--line-hi); background:transparent; color:var(--cyan); white-space:nowrap;
+  }
+  .disp-acao:hover{ background:rgba(77,232,240,0.1); border-color:var(--cyan); }
+  .disp-acao:disabled{ opacity:0.5; cursor:wait; }
   .btn-sec{
     flex:1; min-width:110px;
     font-family:var(--head); font-size:9.5px; letter-spacing:2px; font-weight:700;
@@ -378,6 +436,34 @@
   .boot pre{ font-family:var(--mono); font-size:13px; line-height:1.9; color:var(--cyan); letter-spacing:1.5px; margin:0; min-width:min(90vw, 420px); }
   .boot pre .ok{ color:var(--green); }
 
+  /* ---------- boas-vindas (rosto reconhecido) ---------- */
+  .boas-vindas{
+    position:fixed; inset:0; z-index:75; display:grid; place-items:center; cursor:pointer;
+    background: radial-gradient(circle at 50% 50%, rgba(10,40,30,0.55) 0%, rgba(2,6,9,0.88) 62%);
+    backdrop-filter: blur(6px);
+    animation: bv-cena 4.2s ease forwards;
+  }
+  .boas-vindas.saindo{ animation: bv-sair .5s ease forwards; }
+  @keyframes bv-cena{ 0%{ opacity:0; } 8%{ opacity:1; } 86%{ opacity:1; } 100%{ opacity:0; visibility:hidden; } }
+  @keyframes bv-sair{ to{ opacity:0; visibility:hidden; } }
+  .bv-centro{ position:relative; width:min(78vw, 520px); aspect-ratio:1; display:grid; place-items:center; }
+  .bv-anel{ position:absolute; inset:0; border-radius:50%; border:2px solid transparent; }
+  .bv-anel:nth-child(1){ border-top-color:var(--green); border-bottom-color:var(--green); filter:drop-shadow(0 0 10px var(--green-glow)); animation: girar 2.4s linear infinite; }
+  .bv-anel:nth-child(2){ inset:7%; border-left-color:var(--cyan); border-right-color:var(--cyan); opacity:0.8; animation: girar 3.6s linear infinite reverse; }
+  .bv-anel:nth-child(3){ inset:15%; border:1px dashed rgba(93,252,160,0.45); animation: girar 9s linear infinite; }
+  .bv-anel:nth-child(4){ inset:-4%; border:1px solid rgba(93,252,160,0.18); animation: bv-pulso 1.6s ease-out infinite; }
+  @keyframes bv-pulso{ from{ transform:scale(0.9); opacity:0.9; } to{ transform:scale(1.18); opacity:0; } }
+  .bv-texto{ position:relative; text-align:center; padding:0 12%; }
+  .bv-texto .bv-sup{ font-family:var(--mono); font-size:12px; letter-spacing:4px; color:var(--green); animation: bv-digitar 1s steps(22) both .3s; overflow:hidden; white-space:nowrap; margin:0 auto; }
+  .bv-texto h2{
+    margin:14px 0 10px; font-family:var(--head); font-weight:900; font-size:clamp(20px, 4.4vw, 36px); letter-spacing:6px; color:var(--text-hi);
+    text-shadow:0 0 22px var(--green-glow); animation: bv-revelar .9s cubic-bezier(.2,.8,.2,1) both .7s;
+  }
+  .bv-texto .bv-sub{ font-family:var(--body); font-size:clamp(15px, 2.4vw, 19px); letter-spacing:2px; color:var(--text-mid); animation: bv-revelar .9s ease both 1.2s; }
+  .bv-texto .bv-musica{ margin-top:14px; font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--cyan); min-height:1.3em; }
+  @keyframes bv-digitar{ from{ max-width:0; } to{ max-width:100%; } }
+  @keyframes bv-revelar{ from{ opacity:0; letter-spacing:22px; filter:blur(6px); } to{ opacity:1; filter:none; } }
+
   /* ---------- diálogos ---------- */
   dialog{
     width:min(92vw, 470px);
@@ -399,6 +485,7 @@
   .linha-musica{ display:flex; gap:8px; align-items:stretch; }
   .linha-musica input{ flex:1 1 auto; min-width:0; }
   .linha-musica .btn-sec{ flex:0 0 auto; min-width:0; padding:0 12px; }
+  dialog select.campo-cheio{ width:100%; padding:10px 8px; }
   dialog select{
     background:rgba(3,7,11,0.8); color:var(--text-hi);
     border:1px solid var(--line); border-radius:3px; font-family:var(--body); font-size:14px; padding:0 8px;
@@ -453,6 +540,19 @@
 <body data-estado="offline">
 
   <div class="boot" id="boot" aria-hidden="true"><pre id="boot-texto"></pre></div>
+  <template id="modelo-boas-vindas">
+    <div class="boas-vindas" role="status" aria-live="polite">
+      <div class="bv-centro">
+        <i class="bv-anel"></i><i class="bv-anel"></i><i class="bv-anel"></i><i class="bv-anel"></i>
+        <div class="bv-texto">
+          <p class="bv-sup">IDENTIDADE CONFIRMADA</p>
+          <h2 class="bv-saudacao"></h2>
+          <p class="bv-sub">Bem-vindo de volta, Renato.</p>
+          <p class="bv-musica"></p>
+        </div>
+      </div>
+    </div>
+  </template>
   <canvas id="particulas" aria-hidden="true"></canvas>
   <div class="avisos" id="avisos" aria-live="polite"></div>
 
@@ -520,6 +620,19 @@
               <button class="btn-sec" id="btn-olhar" type="button" disabled>ANALISAR CENA</button>
             </div>
             <p class="descricao-visao" id="visao-descricao"></p>
+          </div>
+        </section>
+
+        <section class="painel">
+          <header class="painel-cab"><span class="codigo">DV.02</span><h2>DISPOSITIVOS</h2><span class="extra" id="dispositivos-estado">—</span></header>
+          <div class="painel-corpo">
+            <div class="radar-dispositivos" id="radar-dispositivos" hidden>
+              <div class="radar-disco" aria-hidden="true"><i></i><i></i><b></b></div>
+              <span>VARRENDO BLUETOOTH, TELAS E REDE…</span>
+            </div>
+            <ul class="lista-dispositivos rolagem" id="lista-dispositivos"></ul>
+            <p class="vazio" id="vazio-dispositivos">Toque em VARRER para o Jarvis procurar fones, celulares, TVs e outros aparelhos por perto.</p>
+            <div class="acoes"><button class="btn-sec" id="btn-varrer" type="button">VARRER</button></div>
           </div>
         </section>
 
@@ -672,7 +785,7 @@
       <label for="cfg-agente">ID do agente ElevenLabs</label>
       <input id="cfg-agente" type="text" spellcheck="false" required>
       <label class="linha-check"><input id="cfg-camera" type="checkbox"> Ligar o sensor e me identificar ao abrir</label>
-      <label class="linha-check"><input id="cfg-musica-ligada" type="checkbox"> Tocar uma música do Spotify (no PC) ao abrir o Jarvis</label>
+      <label class="linha-check"><input id="cfg-musica-ligada" type="checkbox"> Tocar uma música de boas-vindas no Spotify do PC</label>
       <label for="cfg-musica">Música de inicialização: nome ou link do Spotify</label>
       <div class="linha-musica">
         <input id="cfg-musica" type="text" spellcheck="false" autocomplete="off" placeholder="Ex.: Back in Black AC/DC">
@@ -684,6 +797,11 @@
         </select>
         <button class="btn-sec" type="button" id="btn-ouvir-musica">OUVIR</button>
       </div>
+      <label for="cfg-musica-quando">Quando tocar</label>
+      <select id="cfg-musica-quando" class="campo-cheio">
+        <option value="rosto">Quando o Jarvis reconhecer meu rosto e me der boas-vindas</option>
+        <option value="abrir">Assim que o Jarvis abrir</option>
+      </select>
       <div class="resultado-teste" id="resultado-teste" role="status"></div>
       <div class="dialog-acoes">
         <button class="btn-sec" type="button" id="btn-testar">TESTAR</button>
@@ -718,6 +836,7 @@ const PADRAO = {
   musicaLigada: false,
   musica: '',
   musicaTipo: 'musica',
+  musicaQuando: 'rosto',
 };
 const FUSO = 'America/Sao_Paulo';
 const LIMITE_ROSTO = 0.5;
@@ -759,6 +878,7 @@ const NOMES = {
   ver_camera: 'Olhando pela câmera',
   controlar_pc: 'Controlando o PC',
   navegador: 'Usando o navegador',
+  dispositivos: 'Procurando dispositivos',
 };
 const ROTULOS = {
   offline: ['EM ESPERA', 'OFFLINE', 'TOQUE EM INICIAR PARA FALAR'],
@@ -1144,6 +1264,7 @@ async function ligarCamera() {
   $('btn-olhar').disabled = false;
   definirChip('visao', 'on', 'ATIVA');
   registrarAtividade('Sensor óptico ligado', 'ok');
+  iniciarHud();
   iniciarReconhecimento();
   return true;
 }
@@ -1159,7 +1280,7 @@ function desligarCamera() {
   $('aviso-camera').hidden = false;
   $('linha-scan').hidden = true;
   $('scanner').classList.remove('confirmado');
-  $('overlay').getContext('2d').clearRect(0, 0, $('overlay').width, $('overlay').height);
+  pararHud();
   for (const b of ['btn-camera', 'btn-camera-doca']) $(b).setAttribute('aria-pressed', 'false');
   $('btn-camera').textContent = 'LIGAR SENSOR';
   $('btn-olhar').disabled = true;
@@ -1279,12 +1400,8 @@ async function analisarQuadro() {
     .withFaceDescriptor();
   id.calibrado = true;
 
-  const canvas = $('overlay');
-  if (canvas.width !== video.videoWidth) { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   if (!r) {
+    hud.alvo = null;
     id.ultimo = { temRosto: false };
     id.acertosSeguidos = 0;
     id.errosSeguidos = 0;
@@ -1318,16 +1435,30 @@ async function analisarQuadro() {
   }
   id.ultimo = { temRosto: true, confianca, expressao };
 
-  const cor = id.confirmado ? '#5dfca0' : id.rosto ? (id.errosSeguidos >= 3 ? '#ff5d6c' : '#4de8f0') : '#ffa24c';
-  desenharAlvo(ctx, r, cor, id.confirmado ? `RENATO · ${confianca}%` : id.rosto ? (id.errosSeguidos >= 3 ? 'NÃO IDENTIFICADO' : 'ANALISANDO…') : 'ROSTO DETECTADO');
+  // o HUD desenha em coordenadas da tela: a câmera aparece espelhada, então x vira (largura - x)
+  const largura = video.videoWidth;
+  const caixa = r.detection.box;
+  const desconhecido = id.rosto && id.errosSeguidos >= 3;
+  const pct = id.cadastro ? Math.min(100, Math.round((id.cadastro.amostras.length / 10) * 100)) : 0;
+  hud.alvo = {
+    caixa: { x: largura - caixa.x - caixa.width, y: caixa.y, w: caixa.width, h: caixa.height },
+    pontos: r.landmarks.positions.map((p) => ({ x: largura - p.x, y: p.y })),
+    confianca: id.cadastro ? pct : confianca,
+    estado: id.cadastro ? 'cadastro' : id.confirmado ? 'confirmado' : desconhecido ? 'negado' : id.rosto ? 'analisando' : 'sem-cadastro',
+    linhas: id.cadastro ? ['CADASTRO', `AMOSTRAS ${pct}%`, 'MEXA A CABEÇA DEVAGAR']
+      : id.confirmado ? ['RENATO', `MATCH ${confianca}%`, `EXPR ${expressao.toUpperCase()}`]
+      : desconhecido ? ['DESCONHECIDO', `MATCH ${confianca}%`, 'NÃO CORRESPONDE']
+      : id.rosto ? ['ANALISANDO', `MATCH ${confianca}%`, 'COMPARANDO PADRÃO']
+      : ['ROSTO DETECTADO', 'SEM CADASTRO', `EXPR ${expressao.toUpperCase()}`],
+  };
+  hud.visto = performance.now();
 
   if (id.cadastro) {
-    atualizarFicha({ status: `CADASTRANDO ${Math.min(100, Math.round((id.cadastro.amostras.length / 10) * 100))}%`, classeStatus: 'alerta' });
+    atualizarFicha({ status: `CADASTRANDO ${pct}%`, classeStatus: 'alerta' });
   } else if (id.confirmado) {
     atualizarFicha({ sujeito: 'RENATO', confianca, expressao: expressao.toUpperCase(), status: 'IDENTIDADE CONFIRMADA', classeStatus: 'ok' });
     $('id-estado-curto').textContent = 'CONFIRMADO';
   } else if (id.rosto) {
-    const desconhecido = id.errosSeguidos >= 3;
     atualizarFicha({ sujeito: desconhecido ? 'DESCONHECIDO' : 'VERIFICANDO', confianca, expressao: expressao.toUpperCase(), status: desconhecido ? 'ROSTO NÃO CORRESPONDE' : 'COMPARANDO PADRÃO FACIAL', classeStatus: desconhecido ? 'alerta' : '' });
     $('id-estado-curto').textContent = desconhecido ? 'DESCONHECIDO' : 'ANALISANDO';
   } else {
@@ -1336,59 +1467,404 @@ async function analisarQuadro() {
   }
 }
 
-// a câmera aparece espelhada (CSS), então o texto é desenhado espelhado para ficar legível
-function desenharAlvo(ctx, r, cor, rotulo) {
-  const { x, y, width: w, height: h } = r.detection.box;
-  const canto = Math.max(14, w * 0.18);
+// ---------- HUD do reconhecimento: desenhado a cada quadro por cima da câmera ----------
+// a detecção atualiza hud.alvo algumas vezes por segundo; o desenho anda a 60 quadros e desliza até ele
+const hud = { alvo: null, suave: null, visto: 0, quadro: 0, travouEm: 0 };
+const CORES_HUD = { confirmado: '#5dfca0', negado: '#ff5d6c', analisando: '#4de8f0', cadastro: '#ffa24c', 'sem-cadastro': '#ffa24c' };
+const ESTADOS_HUD = { confirmado: 'IDENTIDADE CONFIRMADA', negado: 'NÃO RECONHECIDO', analisando: 'ANALISANDO', cadastro: 'CADASTRANDO', 'sem-cadastro': 'SEM CADASTRO' };
+// contornos do rosto nos 68 pontos: [primeiro, último, fecha a forma?]
+const CONTORNOS = [[0, 16, false], [17, 21, false], [22, 26, false], [27, 30, false], [31, 35, false], [36, 41, true], [42, 47, true], [48, 59, true], [60, 67, true]];
+// malha de holograma: liga o contorno ao centro do rosto
+const MALHA = [[30, 0], [30, 2], [30, 4], [30, 6], [30, 8], [30, 10], [30, 12], [30, 14], [30, 16], [27, 17], [27, 21], [27, 22], [27, 26],
+  [17, 36], [21, 39], [22, 42], [26, 45], [19, 37], [24, 44], [36, 0], [45, 16], [39, 27], [42, 27], [31, 48], [35, 54], [33, 51],
+  [48, 4], [54, 12], [57, 8], [2, 31], [14, 35], [5, 48], [11, 54], [7, 58], [9, 56], [1, 36], [15, 45]];
+const MOVIMENTO = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FONTE_TITULO = 'Orbitron, sans-serif';
+const FONTE_DADOS = '"Share Tech Mono", monospace';
+
+function iniciarHud() {
+  if (!hud.quadro) hud.quadro = requestAnimationFrame(quadroHud);
+}
+
+function pararHud() {
+  cancelAnimationFrame(hud.quadro);
+  Object.assign(hud, { quadro: 0, alvo: null, suave: null });
+  const canvas = $('overlay');
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function quadroHud(agora) {
+  hud.quadro = streamCamera ? requestAnimationFrame(quadroHud) : 0;
+  const video = $('video');
+  const canvas = $('overlay');
+  if (!hud.quadro || !video.videoWidth || !canvas.clientWidth) return;
+  if (canvas.width !== video.videoWidth) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }
+  const W = canvas.width;
+  const H = canvas.height;
+  // com object-fit: cover só o miolo do quadro aparece; k = pixels do quadro por pixel da tela
+  const k = Math.min(W / canvas.clientWidth, H / canvas.clientHeight);
+  const vis = { w: canvas.clientWidth * k, h: canvas.clientHeight * k };
+  vis.x = (W - vis.w) / 2;
+  vis.y = (H - vis.h) / 2;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  // o CSS espelha a câmera; espelhando o desenho também, desenhamos (e escrevemos) do jeito que a pessoa vê
+  ctx.setTransform(-1, 0, 0, 1, W, 0);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const t = MOVIMENTO ? agora / 1000 : 0;
+  const alvo = hud.alvo && agora - hud.visto < 900 ? hud.alvo : null;
+  if (alvo) {
+    suavizarAlvo(alvo);
+    desenharRosto(ctx, hud.suave, t, k, vis, agora);
+  } else {
+    hud.suave = null;
+    desenharBusca(ctx, t, k, vis);
+  }
+  desenharMoldura(ctx, k, vis, alvo);
+}
+
+function suavizarAlvo(alvo) {
+  const s = hud.suave;
+  if (!s) {
+    hud.suave = { ...alvo, caixa: { ...alvo.caixa }, pontos: alvo.pontos.map((p) => ({ ...p })) };
+    return;
+  }
+  const f = MOVIMENTO ? 0.32 : 1;
+  for (const c of ['x', 'y', 'w', 'h']) s.caixa[c] += (alvo.caixa[c] - s.caixa[c]) * f;
+  s.pontos.forEach((p, i) => {
+    p.x += (alvo.pontos[i].x - p.x) * f;
+    p.y += (alvo.pontos[i].y - p.y) * f;
+  });
+  s.estado = alvo.estado;
+  s.linhas = alvo.linhas;
+  s.confianca = alvo.confianca;
+}
+
+function desenharRosto(ctx, s, t, k, vis, agora) {
+  const cor = CORES_HUD[s.estado] || '#4de8f0';
+  const P = s.pontos;
+  const { x, y, w, h } = s.caixa;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const raio = Math.max(w, h) * 0.8;
+  const tracarMalha = () => {
+    ctx.beginPath();
+    for (const [a, b] of MALHA) {
+      ctx.moveTo(P[a].x, P[a].y);
+      ctx.lineTo(P[b].x, P[b].y);
+    }
+    ctx.stroke();
+  };
+  const tracarContornos = () => {
+    ctx.beginPath();
+    for (const [primeiro, ultimo, fecha] of CONTORNOS) {
+      ctx.moveTo(P[primeiro].x, P[primeiro].y);
+      for (let i = primeiro + 1; i <= ultimo; i++) ctx.lineTo(P[i].x, P[i].y);
+      if (fecha) ctx.closePath();
+    }
+    ctx.stroke();
+  };
   ctx.strokeStyle = cor;
-  ctx.lineWidth = Math.max(2, w * 0.012);
   ctx.shadowColor = cor;
-  ctx.shadowBlur = 12;
+
+  // holograma: malha fina + contornos com brilho
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.2;
+  ctx.lineWidth = 0.8 * k;
+  tracarMalha();
+  ctx.globalAlpha = 0.8;
+  ctx.lineWidth = 1.3 * k;
+  ctx.shadowBlur = 6 * k;
+  tracarContornos();
+
+  // faixa de varredura: por onde passa, a malha acende
+  const faixa = y + ((t * 0.45) % 1) * h;
+  ctx.save();
   ctx.beginPath();
-  for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
-    ctx.moveTo(cx, cy + dy * canto);
-    ctx.lineTo(cx, cy);
-    ctx.lineTo(cx + dx * canto, cy);
+  ctx.rect(x - w * 0.2, faixa - h * 0.07, w * 1.4, h * 0.14);
+  ctx.clip();
+  ctx.globalAlpha = 0.95;
+  ctx.strokeStyle = '#e9fdff';
+  ctx.lineWidth = 1.2 * k;
+  tracarMalha();
+  tracarContornos();
+  ctx.restore();
+  const brilho = ctx.createLinearGradient(x - w * 0.2, 0, x + w * 1.2, 0);
+  brilho.addColorStop(0, 'rgba(0,0,0,0)');
+  brilho.addColorStop(0.5, cor);
+  brilho.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = 0.6;
+  ctx.strokeStyle = brilho;
+  ctx.lineWidth = 1.2 * k;
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.2, faixa);
+  ctx.lineTo(x + w * 1.2, faixa);
+  ctx.stroke();
+  ctx.strokeStyle = cor;
+
+  // âncoras biométricas (olhos e nariz): losangos girando
+  const media = (a, b) => {
+    let sx = 0;
+    let sy = 0;
+    for (let i = a; i <= b; i++) {
+      sx += P[i].x;
+      sy += P[i].y;
+    }
+    return { x: sx / (b - a + 1), y: sy / (b - a + 1) };
+  };
+  ctx.globalAlpha = 0.95;
+  ctx.lineWidth = 1.2 * k;
+  for (const ponto of [media(36, 41), media(42, 47), P[30]]) {
+    const lado = 6 * k;
+    ctx.save();
+    ctx.translate(ponto.x, ponto.y);
+    ctx.rotate(t * 1.6 + Math.PI / 4);
+    ctx.strokeRect(-lado / 2, -lado / 2, lado, lado);
+    ctx.restore();
+  }
+
+  // anéis de mira
+  ctx.shadowBlur = 10 * k;
+  const arco = (r, inicio, tamanho, largura, alfa) => {
+    ctx.globalAlpha = alfa;
+    ctx.lineWidth = largura;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, inicio, inicio + tamanho);
+    ctx.stroke();
+  };
+  for (let i = 0; i < 3; i++) arco(raio, t * 0.6 + (i * Math.PI * 2) / 3, Math.PI * 0.42, 2 * k, 0.85);
+  for (let i = 0; i < 2; i++) arco(raio * 0.9, -t * 1.4 + i * Math.PI, Math.PI * 0.12, 1.4 * k, 0.6);
+  ctx.shadowBlur = 0;
+  arco(raio * 1.12, 0, Math.PI * 2, 1 * k, 0.25);
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 1 * k;
+  ctx.beginPath();
+  for (let i = 0; i < 72; i++) {
+    const a = -t * 0.25 + (i / 72) * Math.PI * 2;
+    const r1 = raio * 1.12;
+    const r2 = r1 + (i % 6 === 0 ? 7 : 3) * k;
+    ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
   }
   ctx.stroke();
 
+  // cantoneiras: respiram enquanto analisa e fecham no rosto quando confirma
+  const folga = s.estado === 'confirmado' ? w * 0.06 : w * (0.11 + 0.04 * Math.sin(t * 3));
+  const bx = x - folga;
+  const by = y - folga;
+  const bw = w + folga * 2;
+  const bh = h + folga * 2;
+  const canto = Math.min(bw, bh) * 0.16;
+  ctx.globalAlpha = 0.95;
+  ctx.lineWidth = 2.2 * k;
+  ctx.shadowBlur = 8 * k;
+  ctx.beginPath();
+  for (const [px, py, dx, dy] of [[bx, by, 1, 1], [bx + bw, by, -1, 1], [bx, by + bh, 1, -1], [bx + bw, by + bh, -1, -1]]) {
+    ctx.moveTo(px, py + dy * canto);
+    ctx.lineTo(px, py);
+    ctx.lineTo(px + dx * canto, py);
+  }
+  ctx.stroke();
+
+  // pulso de "alvo travado" logo que confirma
+  const desde = agora - hud.travouEm;
+  if (s.estado === 'confirmado' && desde < 1200) {
+    const p = desde / 1200;
+    arco(raio * (1 + p * 0.8), 0, Math.PI * 2, (3 * (1 - p) + 0.5) * k, 1 - p);
+  }
+
+  // barra de confiança segmentada embaixo do rosto
+  if (s.confianca != null) {
+    const segmentos = 12;
+    const cheios = Math.round((s.confianca / 100) * segmentos);
+    const largura = bw * 0.8;
+    const passo = largura / segmentos;
+    ctx.shadowBlur = 0;
+    for (let i = 0; i < segmentos; i++) {
+      ctx.globalAlpha = i < cheios ? 0.9 : 0.18;
+      ctx.fillStyle = cor;
+      ctx.fillRect(bx + bw * 0.1 + i * passo, by + bh + 8 * k, passo - 2 * k, 4 * k);
+    }
+  }
+  desenharFicha(ctx, s, cor, cx, cy, raio, k, vis);
+}
+
+// painel de dados ligado ao anel por uma linha-guia
+function desenharFicha(ctx, s, cor, cx, cy, raio, k, vis) {
+  const linhas = s.linhas || [];
+  if (!linhas.length) return;
+  const tamTitulo = 12 * k;
+  const tamLinha = 10 * k;
+  const pad = 7 * k;
   ctx.shadowBlur = 0;
+  ctx.font = `700 ${tamTitulo}px ${FONTE_TITULO}`;
+  let largura = ctx.measureText(linhas[0]).width;
+  ctx.font = `${tamLinha}px ${FONTE_DADOS}`;
+  for (const l of linhas.slice(1)) largura = Math.max(largura, ctx.measureText(l).width);
+  const caixaW = largura + pad * 2 + 3 * k;
+  const caixaH = tamTitulo + (linhas.length - 1) * (tamLinha + 5 * k) + pad * 2;
+  let direita = true;
+  const ancora = (lado) => {
+    const a = lado ? -Math.PI * 0.2 : -Math.PI * 0.8;
+    return { x: cx + Math.cos(a) * raio, y: cy + Math.sin(a) * raio };
+  };
+  let p = ancora(true);
+  if (p.x + 34 * k + caixaW > vis.x + vis.w - 4 * k) {
+    direita = false;
+    p = ancora(false);
+  }
+  const cotovelo = { x: p.x + (direita ? 16 : -16) * k, y: p.y - 16 * k };
+  const lx = direita ? cotovelo.x + 18 * k : cotovelo.x - 18 * k - caixaW;
+  const ly = Math.max(vis.y + 4 * k, Math.min(vis.y + vis.h - caixaH - 4 * k, cotovelo.y - caixaH / 2));
+  ctx.strokeStyle = cor;
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = 1 * k;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(cotovelo.x, cotovelo.y);
+  ctx.lineTo(direita ? lx : lx + caixaW, cotovelo.y);
+  ctx.stroke();
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(Math.PI / 4);
+  ctx.strokeRect(-2.5 * k, -2.5 * k, 5 * k, 5 * k);
+  ctx.restore();
+
+  ctx.globalAlpha = 0.78;
+  ctx.fillStyle = 'rgba(3,12,18,0.85)';
+  ctx.fillRect(lx, ly, caixaW, caixaH);
+  ctx.globalAlpha = 0.45;
+  ctx.strokeRect(lx, ly, caixaW, caixaH);
+  ctx.globalAlpha = 1;
   ctx.fillStyle = cor;
-  ctx.globalAlpha = 0.75;
-  for (const p of r.landmarks.positions) {
+  ctx.fillRect(direita ? lx : lx + caixaW - 2 * k, ly, 2 * k, caixaH);
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.font = `700 ${tamTitulo}px ${FONTE_TITULO}`;
+  ctx.fillText(linhas[0], lx + pad + 3 * k, ly + pad);
+  ctx.font = `${tamLinha}px ${FONTE_DADOS}`;
+  ctx.fillStyle = '#cfeff3';
+  linhas.slice(1).forEach((l, i) => ctx.fillText(l, lx + pad + 3 * k, ly + pad + tamTitulo + 5 * k + i * (tamLinha + 5 * k)));
+}
+
+// sem rosto: radar varrendo o centro da imagem
+function desenharBusca(ctx, t, k, vis) {
+  const cx = vis.x + vis.w / 2;
+  const cy = vis.y + vis.h * 0.46;
+  const r = Math.min(vis.w, vis.h) * 0.3;
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#4de8f0';
+  ctx.lineWidth = 1 * k;
+  ctx.globalAlpha = 0.22;
+  ctx.beginPath();
+  for (const f of [1, 0.66, 0.33]) {
+    ctx.moveTo(cx + r * f, cy);
+    ctx.arc(cx, cy, r * f, 0, Math.PI * 2);
+  }
+  ctx.moveTo(cx - r * 1.15, cy);
+  ctx.lineTo(cx + r * 1.15, cy);
+  ctx.moveTo(cx, cy - r * 1.15);
+  ctx.lineTo(cx, cy + r * 1.15);
+  ctx.stroke();
+  const a = t * 1.8;
+  const rastro = 1.1;
+  if (ctx.createConicGradient) {
+    const leque = ctx.createConicGradient(a - rastro, cx, cy);
+    leque.addColorStop(0, 'rgba(77,232,240,0)');
+    leque.addColorStop(rastro / (Math.PI * 2), 'rgba(77,232,240,0.3)');
+    leque.addColorStop(Math.min(1, rastro / (Math.PI * 2) + 0.001), 'rgba(77,232,240,0)');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = leque;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, Math.max(1.2, w * 0.006), 0, Math.PI * 2);
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, a - rastro, a);
+    ctx.closePath();
     ctx.fill();
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = 0.75;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  ctx.stroke();
+  const texto = !id.faceapi ? 'CARREGANDO MÓDULO BIOMÉTRICO' : !id.calibrado ? 'CALIBRANDO SENSOR' : 'PROCURANDO ROSTO';
+  ctx.globalAlpha = 0.55 + 0.35 * Math.sin(t * 3);
+  ctx.fillStyle = '#8ff3f7';
+  ctx.font = `${10.5 * k}px ${FONTE_DADOS}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(texto, cx, cy + r + 12 * k);
+}
 
-  const tamanho = Math.max(13, Math.round(w * 0.075));
-  ctx.font = `${tamanho}px "Share Tech Mono", monospace`;
-  const larguraTexto = ctx.measureText(rotulo).width;
-  ctx.save();
-  ctx.scale(-1, 1);
-  ctx.fillStyle = 'rgba(3,10,14,0.75)';
-  ctx.fillRect(-(x + w), y - tamanho - 12, larguraTexto + 14, tamanho + 8);
-  ctx.fillStyle = cor;
-  ctx.fillText(rotulo, -(x + w) + 7, y - 10);
-  ctx.restore();
+// textos de canto, como num visor
+function desenharMoldura(ctx, k, vis, alvo) {
+  const m = 9 * k;
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.75;
+  ctx.fillStyle = alvo ? CORES_HUD[alvo.estado] : '#8ff3f7';
+  ctx.font = `${9 * k}px ${FONTE_DADOS}`;
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillText(`BIO-SCAN · ${alvo ? ESTADOS_HUD[alvo.estado] : 'VARRENDO'}`, vis.x + m, vis.y + m);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#8ff3f7';
+  ctx.fillText(new Date().toLocaleTimeString('pt-BR', { hour12: false, timeZone: FUSO }), vis.x + vis.w - m, vis.y + m);
+  ctx.textBaseline = 'bottom';
+  ctx.textAlign = 'left';
+  ctx.fillText(`ALVO ${alvo ? '01' : '--'} · 68 PTS`, vis.x + m, vis.y + vis.h - m);
+  if (hud.suave && alvo) {
+    ctx.textAlign = 'right';
+    const c = hud.suave.caixa;
+    ctx.fillText(`X${Math.round(c.x + c.w / 2)} Y${Math.round(c.y + c.h / 2)}`, vis.x + vis.w - m, vis.y + vis.h - m);
+  }
 }
 
 function aoIdentificar(confianca, expressao) {
   id.confirmado = true;
+  hud.travouEm = performance.now();
   $('scanner').classList.add('confirmado');
   definirChip('visao', 'ok', 'RENATO');
-  if (Date.now() - id.saudadoEm < 10 * 60 * 1000) return;
+  // a música de boas-vindas espera o rosto (uma vez por abertura do Jarvis)
+  const tocarMusica = musica.esperandoRosto;
+  musica.esperandoRosto = false;
+  if (Date.now() - id.saudadoEm < 10 * 60 * 1000) {
+    if (tocarMusica) tocarMusicaDeInicio();
+    return;
+  }
   id.saudadoEm = Date.now();
   const hora = Number(new Date().toLocaleString('pt-BR', { hour: 'numeric', hour12: false, timeZone: FUSO }));
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-  avisar('IDENTIDADE CONFIRMADA', `${saudacao}, Renato. Bem-vindo de volta.`);
+  const tela = mostrarBoasVindas(saudacao);
+  if (tocarMusica) {
+    const aviso = tela.querySelector('.bv-musica');
+    aviso.textContent = '♪ INICIANDO SUA MÚSICA…';
+    tocarMusicaDeInicio().then((r) => { aviso.textContent = r.ok ? `♪ ${r.faixa}` : ''; });
+  }
   registrarAtividade(`Renato identificado (${confianca}%), expressão ${expressao}`, 'ok');
   if (!conversa) {
     definirEstado('offline');
     $('btn-ligar').classList.add('chamando');
   }
   avisarJarvisDaIdentidade();
+}
+
+function mostrarBoasVindas(saudacao) {
+  const tela = $('modelo-boas-vindas').content.firstElementChild.cloneNode(true);
+  tela.querySelector('.bv-saudacao').textContent = `${saudacao.toUpperCase()}, SENHOR`;
+  const fechar = () => {
+    tela.classList.add('saindo');
+    setTimeout(() => tela.remove(), 500);
+  };
+  tela.addEventListener('click', fechar, { once: true });
+  setTimeout(() => tela.remove(), 4300);
+  document.body.append(tela);
+  return tela;
 }
 
 function avisarJarvisDaIdentidade() {
@@ -1486,14 +1962,16 @@ async function controlarPc({ acao, alvo = '', valor = '' } = {}) {
 const nav = { acompanhando: false, idTarefa: 0, ultimoPasso: 0, avisado: '' };
 const desfechoNavegador = (e) => `${e.id}:${e.fase}:${e.passo}`;
 
-async function chamarNavegador(corpo) {
-  const r = await fetch(`${PC_URL}/navegador`, {
+async function chamarPc(caminho, corpo) {
+  const r = await fetch(`${PC_URL}${caminho}`, {
     method: corpo ? 'POST' : 'GET',
     headers: { 'Content-Type': 'application/json', 'x-jarvis-key': config.chave },
     body: corpo ? JSON.stringify(corpo) : undefined,
   });
   return r.json();
 }
+
+const chamarNavegador = (corpo) => chamarPc('/navegador', corpo);
 
 function falaDoNavegador(e) {
   if (e.fase === 'concluido') return `Pronto. ${e.resposta}`;
@@ -1571,6 +2049,120 @@ async function usarNavegador({ acao = 'tarefa', texto = '' } = {}) {
   return falaDoNavegador(e);
 }
 
+// ---------- dispositivos por perto (Bluetooth, telas e rede, procurados pelo Jarvis PC) ----------
+const disp = { lista: [], buscando: null };
+const ICONES_DISP = {
+  fone: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/>',
+  caixa: '<rect x="6" y="2" width="12" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><path d="M12 6h.01"/>',
+  celular: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+  tv: '<rect x="2" y="4" width="20" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/>',
+  relogio: '<circle cx="12" cy="12" r="6"/><path d="M9 3h6l1 3H8zM9 21h6l1-3H8zM12 10v2l1.5 1"/>',
+  periferico: '<rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 3v6"/>',
+  computador: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M1 20h22"/>',
+  console: '<path d="M6 8h12a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6L14 15h-4l-1 .6A4 4 0 0 1 2 13v-1a4 4 0 0 1 4-4z"/><path d="M7 11v3M5.5 12.5h3"/>',
+  roteador: '<rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 13l-2-6M17 13l2-6M8 16.5h.01M12 16.5h.01"/>',
+  camera: '<rect x="2" y="7" width="14" height="10" rx="1.5"/><path d="M16 11l6-3v8l-6-3"/>',
+  carro: '<path d="M5 16l1.5-5h11L19 16M3 16h18v3H3zM7 19v2M17 19v2"/>',
+  impressora: '<path d="M6 9V3h12v6M6 17H3v-6h18v6h-3"/><rect x="6" y="14" width="12" height="7"/>',
+  aparelho: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"/>',
+};
+const ROTULOS_ACAO_DISP = { parear: 'PAREAR', conectar: 'CONECTAR', transmitir: 'TRANSMITIR', abrir_celular: 'ABRIR NO PC' };
+
+function barrasDeSinal(dbm) {
+  if (dbm == null) return null;
+  const cheias = dbm > -60 ? 4 : dbm > -70 ? 3 : dbm > -80 ? 2 : 1;
+  const barras = el('span', { class: 'disp-sinal', title: `${dbm} dBm` });
+  for (let i = 0; i < 4; i++) barras.append(el('i', i < cheias ? { class: 'on' } : {}));
+  return barras;
+}
+
+function renderizarDispositivos() {
+  const itens = disp.lista.map((a) => {
+    const icone = el('span', { class: 'disp-icone', 'aria-hidden': 'true' });
+    icone.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICONES_DISP[a.tipo] || ICONES_DISP.aparelho}</svg>`;
+    const botao = a.acao ? el('button', { class: 'disp-acao', type: 'button' }, ROTULOS_ACAO_DISP[a.acao] || 'CONECTAR') : null;
+    if (botao) {
+      botao.addEventListener('click', async () => {
+        botao.disabled = true;
+        await conectarDispositivo(a);
+        botao.disabled = false;
+      });
+    }
+    return el('li', { class: 'disp', 'data-estado': a.estado },
+      icone,
+      el('span', { class: 'disp-texto' }, el('b', { title: a.nome }, a.nome), el('small', {}, `${a.detalhe} · ${a.estado}`)),
+      barrasDeSinal(a.sinal) || el('span'),
+      botao || el('span'));
+  });
+  $('lista-dispositivos').replaceChildren(...itens);
+  $('vazio-dispositivos').hidden = itens.length > 0;
+  if (!itens.length) $('vazio-dispositivos').textContent = 'Nenhum aparelho encontrado por perto. Ligue o Bluetooth do aparelho e varra de novo.';
+}
+
+function procurarDispositivos() {
+  // uma busca por vez: quem pedir no meio espera a mesma
+  if (!disp.buscando) {
+    disp.buscando = (async () => {
+      $('radar-dispositivos').hidden = false;
+      $('vazio-dispositivos').hidden = true;
+      $('btn-varrer').disabled = true;
+      $('dispositivos-estado').textContent = 'VARRENDO';
+      try {
+        const r = await chamarPc('/dispositivos');
+        if (!r.ok) throw new Error(r.mensagem || 'a busca falhou');
+        disp.lista = r.aparelhos;
+        guardar('jarvis.pc', true);
+        definirChip('pc', 'ok', 'ONLINE');
+        renderizarDispositivos();
+        registrarAtividade(`Dispositivos: ${r.aparelhos.length} encontrados em ${r.segundos}s`, 'ok');
+        return r;
+      } catch (erro) {
+        const mensagem = erro instanceof TypeError ? 'O Jarvis PC não está rodando: ligue-o para procurar dispositivos.' : erro.message;
+        $('vazio-dispositivos').textContent = mensagem;
+        $('vazio-dispositivos').hidden = false;
+        return { ok: false, mensagem };
+      } finally {
+        disp.buscando = null;
+        $('radar-dispositivos').hidden = true;
+        $('btn-varrer').disabled = false;
+        $('dispositivos-estado').textContent = disp.lista.length ? `${disp.lista.length} ALVOS` : '—';
+      }
+    })();
+  }
+  return disp.buscando;
+}
+
+async function conectarDispositivo(aparelho) {
+  let r;
+  try {
+    r = await chamarPc('/dispositivos/conectar', { id: aparelho.id });
+  } catch {
+    return 'O Jarvis PC não está rodando.';
+  }
+  registrarAtividade(`Dispositivos: ${r.mensagem}`, r.ok ? 'ok' : 'erro');
+  avisar(r.ok ? aparelho.nome.toUpperCase() : 'NÃO CONECTOU', r.mensagem);
+  if (r.ok && aparelho.acao === 'parear') setTimeout(procurarDispositivos, 1500);
+  return r.mensagem;
+}
+
+// ferramenta de cliente "dispositivos": procurar ou conectar pelo nome falado
+async function usarDispositivos({ acao = 'procurar', alvo = '' } = {}) {
+  if (acao !== 'conectar' || !disp.lista.length) {
+    const r = await procurarDispositivos();
+    if (!r.ok) return r.mensagem;
+    if (acao !== 'conectar') return `${r.resumo} Para conectar um deles, chame dispositivos com acao "conectar" e o nome em alvo.`;
+  }
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const procurado = norm(alvo);
+  if (!procurado) return `Qual aparelho? Encontrei: ${disp.lista.map((a) => a.nome).join(', ')}.`;
+  const candidatos = disp.lista.filter((a) => norm(a.nome).includes(procurado) || procurado.includes(norm(a.nome))
+    || (procurado && norm(a.tipo) === procurado));
+  const escolhido = candidatos.find((a) => a.acao) || candidatos[0];
+  if (!escolhido) return `Não achei "${alvo}" entre os aparelhos: ${disp.lista.map((a) => a.nome).join(', ')}.`;
+  if (!escolhido.acao) return `${escolhido.nome} já está ${escolhido.estado}; não há o que conectar.`;
+  return conectarDispositivo(escolhido);
+}
+
 // ---------- spotify ----------
 const LINK_SPOTIFY = /^https:\/\/open\.spotify\.com\/(playlist|album|artist|track)\/([A-Za-z0-9]+)/;
 
@@ -1596,7 +2188,7 @@ function abrirSpotify({ url, nome } = {}) {
 // ---------- música de inicialização (Spotify do PC) ----------
 // enquanto a conversa está ligada a música fica baixa, senão o microfone escuta a letra como se fosse o Renato
 const VOLUME_CONVERSANDO = 25;
-const musica = { tocando: false, abaixada: false, volumeAntes: null };
+const musica = { tocando: false, abaixada: false, volumeAntes: null, esperandoRosto: false };
 
 function pedirMusica(corpo) {
   return chamarN8n('jarvis/musica', { method: 'POST', body: corpo })
@@ -1621,7 +2213,7 @@ async function tocarMusicaDeInicio({ busca = config.musica, tipo = config.musica
     mostrarSpotify({ nome: r.tocando_agora || r.nome, url: r.url, detalhe: `Música de inicialização · ${r.aparelho}` });
     registrarAtividade(`♪ ${r.tocando_agora || r.nome}`, 'ok');
     if (conversa) abaixarMusica();
-    return { ok: true, mensagem: `Tocando "${r.tocando_agora || r.nome}" no ${r.aparelho}.` };
+    return { ok: true, faixa: r.tocando_agora || r.nome, mensagem: `Tocando "${r.tocando_agora || r.nome}" no ${r.aparelho}.` };
   }
   if (r.motivo === 'sem_aparelho') {
     const mensagem = pcAbre
@@ -1747,6 +2339,7 @@ async function ligar() {
         ver_camera: ({ pergunta } = {}) => olhar(pergunta),
         controlar_pc: controlarPc,
         navegador: usarNavegador,
+        dispositivos: usarDispositivos,
       },
       onConnect: ({ conversationId }) => {
         conversaId = conversationId;
@@ -1839,6 +2432,7 @@ function abrirConfig() {
   $('cfg-musica-ligada').checked = !!config.musicaLigada;
   $('cfg-musica').value = config.musica;
   $('cfg-musica-tipo').value = config.musicaTipo;
+  $('cfg-musica-quando').value = config.musicaQuando;
   $('resultado-teste').textContent = '';
   $('resultado-teste').className = 'resultado-teste';
   $('dialog-config').showModal();
@@ -1992,6 +2586,7 @@ $('btn-config').addEventListener('click', abrirConfig);
 $('btn-testar').addEventListener('click', testarConfig);
 $('btn-testar-pc').addEventListener('click', testarPc);
 $('btn-ouvir-musica').addEventListener('click', ouvirMusicaEscolhida);
+$('btn-varrer').addEventListener('click', procurarDispositivos);
 $('btn-cancelar-config').addEventListener('click', () => $('dialog-config').close());
 $('form-config').addEventListener('submit', () => {
   salvarConfig({
@@ -2002,6 +2597,7 @@ $('form-config').addEventListener('submit', () => {
     musicaLigada: $('cfg-musica-ligada').checked,
     musica: $('cfg-musica').value.trim(),
     musicaTipo: $('cfg-musica-tipo').value,
+    musicaQuando: $('cfg-musica-quando').value,
   });
   registrarAtividade('Configuração salva', 'ok');
   definirChip('cerebro', 'wait', 'VERIFICANDO');
@@ -2026,10 +2622,14 @@ setInterval(pcStatus, 30 * 1000);
 
 definirEstado('offline');
 particulas();
-// a música toca quando o Jarvis abre (aba nova ou duas palmas), não a cada recarregar a página
+// a música vale para cada abertura do Jarvis (aba nova ou duas palmas), não a cada recarregar a página;
+// no modo "rosto" ela espera a identificação, se o sensor liga sozinho e há rosto cadastrado
 let abriuAgora = true;
 try { abriuAgora = sessionStorage.getItem('jarvis.boot') !== '1'; } catch {}
-if (abriuAgora && config.musicaLigada && config.musica && config.chave && !DEMO) tocarMusicaDeInicio();
+if (abriuAgora && config.musicaLigada && config.musica && config.chave && !DEMO) {
+  if (config.musicaQuando === 'rosto' && config.cameraAuto && id.rosto) musica.esperandoRosto = true;
+  else tocarMusicaDeInicio();
+}
 boot().then(async () => {
   if (!config.chave && !DEMO) {
     definirChip('cerebro', 'off', 'SEM CHAVE');

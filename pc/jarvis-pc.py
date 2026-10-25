@@ -6,7 +6,8 @@ servidor quando o agente usa a ferramenta controlar_pc: abrir programas e sites,
 pesquisar, volume, mídia e bloquear a tela. Só aceita pedidos com a chave do
 cérebro e vindos da página do Jarvis, e só executa ações de uma lista fixa —
 nunca um comando livre. A ferramenta navegador (/navegador) faz tarefas numa
-janela própria do Chrome — veja navegador.py.
+janela própria do Chrome — veja navegador.py. /dispositivos procura fones,
+celulares, TVs e outros aparelhos por perto — veja dispositivos.py.
 
 Opcional: com numpy e sounddevice instalados (o venv do OpenJarvis tem), fica
 ouvindo DUAS palmas e abre a página do Jarvis já iniciando a conversa.
@@ -27,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote
 
+import dispositivos
 from navegador import Navegador
 
 # ---------------- CONFIG ----------------
@@ -192,16 +194,21 @@ class Servidor(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path not in ("/status", "/navegador"):
+        if self.path not in ("/status", "/navegador", "/dispositivos"):
             return self.responder(404, {"ok": False})
         if not self.autorizado():
             return
         if self.path == "/navegador":
             return self.responder(200, NAVEGADOR.comando("status"))
-        self.responder(200, {"ok": True, "versao": 2, "apps": sorted(APPS), "palmas": PALMAS_ATIVAS})
+        if self.path == "/dispositivos":
+            try:
+                return self.responder(200, dispositivos.buscar())
+            except Exception as erro:
+                return self.responder(200, {"ok": False, "mensagem": f"A busca de dispositivos falhou: {erro}"})
+        self.responder(200, {"ok": True, "versao": 3, "apps": sorted(APPS), "palmas": PALMAS_ATIVAS})
 
     def do_POST(self):
-        if self.path not in ("/acao", "/navegador"):
+        if self.path not in ("/acao", "/navegador", "/dispositivos/conectar"):
             return self.responder(404, {"ok": False})
         if not self.autorizado():
             return
@@ -211,6 +218,10 @@ class Servidor(BaseHTTPRequestHandler):
             pedido = json.loads(self.rfile.read(tamanho) or b"{}")
             if self.path == "/navegador":
                 return self.responder(200, NAVEGADOR.comando(pedido.get("acao", ""), pedido.get("texto", "")))
+            if self.path == "/dispositivos/conectar":
+                resultado = dispositivos.conectar(str(pedido.get("id", "")))
+                print(f">> dispositivos: {resultado['mensagem']}")
+                return self.responder(200, resultado)
             resultado = executar(pedido.get("acao", ""), pedido.get("alvo", ""), pedido.get("valor", ""))
         except Exception as erro:
             resultado = {"ok": False, "mensagem": f"Falhou: {erro}"}
