@@ -838,6 +838,7 @@ function atualizarHud() {
     ['ROTAÇÃO', `${grau(L.rot.x)} / ${grau(L.rot.y)}`],
     ['ESTADO', L.explosao > 0.3 ? 'DESMONTADO' : 'MONTADO'],
     ['QUADROS', `${L.fps} FPS`],
+    ['QUALIDADE', L.economia ? 'ECONÔMICA' : 'MÁXIMA'],
   ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   h.gesto.textContent = NOMES_GESTO[L.duas ? 'dupla' : L.gesto] || '—';
   for (const s of h.guia.children) s.classList.toggle('ativo', s.dataset.g === (L.duas ? 'dupla' : L.gesto) || (s.dataset.g === 'deslize' && performance.now() - L.trocaEm < 700));
@@ -1109,10 +1110,11 @@ function ajustarTamanho() {
 function quadro() {
   if (!L.aberto) return;
   L.quadro = requestAnimationFrame(quadro);
-  const dt = Math.min(L.relogio.getDelta(), 0.05);
+  const delta = L.relogio.getDelta();
+  const dt = Math.min(delta, 0.05);
   const t = L.relogio.elapsedTime;
   const agora = performance.now();
-  L.fps = Math.round(L.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05);
+  L.fps = Math.round(L.fps * 0.9 + (1 / Math.max(delta, 1e-3)) * 0.1);
   processarMaos(agora);
 
   // giro com inércia; parado, gira sozinho bem devagar
@@ -1126,7 +1128,7 @@ function quadro() {
   L.projecao.scale.setScalar(L.escala);
   L.explosao = THREE.MathUtils.lerp(L.explosao, L.explosaoAlvo, L.explosaoAlvo > L.explosao ? 0.05 : 0.12);
   L.atracao = THREE.MathUtils.lerp(L.atracao, L.atracaoAlvo, 0.08);
-  L.morph = Math.min(1, L.morph + dt / 2.2);
+  L.morph = Math.min(1, L.morph + Math.min(delta, 0.25) / 2.2);   // a transformação dura ~2 s mesmo com poucos quadros
 
   const u = L.nuvem.material.uniforms;
   u.uTempo.value = t;
@@ -1155,7 +1157,18 @@ function quadro() {
   }
   poeira.needsUpdate = true;
 
-  L.composer.render();
+  // sem aceleração de vídeo (ou placa fraca) o bloom pesa demais: depois de 3 s lentos, desliga e baixa a resolução
+  if (!L.economia) {
+    if (L.fps >= 24) L.lentoDesde = 0;
+    else if (!L.lentoDesde) L.lentoDesde = agora;
+    else if (agora - L.lentoDesde > 3000) {
+      L.economia = true;
+      L.renderer.setPixelRatio(1);
+      ajustarTamanho();
+    }
+  }
+  if (L.economia) L.renderer.render(L.cena, L.camera);
+  else L.composer.render();
   if (Math.floor(t * 5) !== L.ultimoHud) {
     L.ultimoHud = Math.floor(t * 5);
     atualizarHud();
