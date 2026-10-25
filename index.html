@@ -396,6 +396,13 @@
     border:1px solid var(--line); border-radius:3px; font-family:var(--body); font-size:15px; padding:10px 12px;
   }
   dialog .linha-check{ display:flex; gap:10px; align-items:center; text-transform:none; letter-spacing:0.5px; font-family:var(--body); font-size:14px; color:var(--text-mid); }
+  .linha-musica{ display:flex; gap:8px; align-items:stretch; }
+  .linha-musica input{ flex:1 1 auto; min-width:0; }
+  .linha-musica .btn-sec{ flex:0 0 auto; min-width:0; padding:0 12px; }
+  dialog select{
+    background:rgba(3,7,11,0.8); color:var(--text-hi);
+    border:1px solid var(--line); border-radius:3px; font-family:var(--body); font-size:14px; padding:0 8px;
+  }
   .dialog-acoes{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; margin-top:20px; }
   .dialog-acoes .btn-sec{ flex:0 0 auto; min-width:0; padding:10px 16px; }
   .btn-pri{ font-family:var(--head); font-size:9.5px; letter-spacing:2px; font-weight:700; background:var(--cyan); color:var(--bg-void); border:none; border-radius:3px; padding:10px 18px; cursor:pointer; }
@@ -665,6 +672,18 @@
       <label for="cfg-agente">ID do agente ElevenLabs</label>
       <input id="cfg-agente" type="text" spellcheck="false" required>
       <label class="linha-check"><input id="cfg-camera" type="checkbox"> Ligar o sensor e me identificar ao abrir</label>
+      <label class="linha-check"><input id="cfg-musica-ligada" type="checkbox"> Tocar uma música do Spotify (no PC) ao abrir o Jarvis</label>
+      <label for="cfg-musica">Música de inicialização: nome ou link do Spotify</label>
+      <div class="linha-musica">
+        <input id="cfg-musica" type="text" spellcheck="false" autocomplete="off" placeholder="Ex.: Back in Black AC/DC">
+        <select id="cfg-musica-tipo" aria-label="O que é">
+          <option value="musica">Música</option>
+          <option value="playlist">Playlist</option>
+          <option value="album">Álbum</option>
+          <option value="artista">Artista</option>
+        </select>
+        <button class="btn-sec" type="button" id="btn-ouvir-musica">OUVIR</button>
+      </div>
       <div class="resultado-teste" id="resultado-teste" role="status"></div>
       <div class="dialog-acoes">
         <button class="btn-sec" type="button" id="btn-testar">TESTAR</button>
@@ -696,6 +715,9 @@ const PADRAO = {
   agente: 'agent_6501ksgr3r2tfycsnwcg3c4yab30',
   chave: '',
   cameraAuto: true,
+  musicaLigada: false,
+  musica: '',
+  musicaTipo: 'musica',
 };
 const FUSO = 'America/Sao_Paulo';
 const LIMITE_ROSTO = 0.5;
@@ -1571,6 +1593,68 @@ function abrirSpotify({ url, nome } = {}) {
   registrarAtividade(`Spotify: abrindo ${nome || 'playlist'}`, 'ferramenta');
 }
 
+// ---------- música de inicialização (Spotify do PC) ----------
+// enquanto a conversa está ligada a música fica baixa, senão o microfone escuta a letra como se fosse o Renato
+const VOLUME_CONVERSANDO = 25;
+const musica = { tocando: false, abaixada: false, volumeAntes: null };
+
+function pedirMusica(corpo) {
+  return chamarN8n('jarvis/musica', { method: 'POST', body: corpo })
+    .catch((erro) => ({ ok: false, motivo: 'erro', mensagem: `Não consegui falar com o n8n: ${erro.message}` }));
+}
+
+async function tocarMusicaDeInicio({ busca = config.musica, tipo = config.musicaTipo } = {}) {
+  if (!busca) return { ok: false, mensagem: 'Escolha a música primeiro.' };
+  registrarAtividade(`Música de inicialização: ${busca}`, 'ferramenta');
+  let r = await pedirMusica({ acao: 'tocar', busca, tipo, aparelho: 'pc' });
+  // Spotify fechado no PC: o Jarvis PC abre o app e tentamos de novo enquanto ele conecta
+  if (r.motivo === 'sem_aparelho' && ler('jarvis.pc', false)) {
+    await controlarPc({ acao: 'abrir_app', alvo: 'spotify' });
+    for (let tentativa = 0; tentativa < 4 && r.motivo === 'sem_aparelho'; tentativa++) {
+      await esperar(4000);
+      r = await pedirMusica({ acao: 'tocar', busca, tipo, aparelho: 'pc' });
+    }
+  }
+  if (r.ok) {
+    musica.tocando = true;
+    mostrarSpotify({ nome: r.tocando_agora || r.nome, url: r.url, detalhe: `Música de inicialização · ${r.aparelho}` });
+    registrarAtividade(`♪ ${r.tocando_agora || r.nome}`, 'ok');
+    if (conversa) abaixarMusica();
+    return { ok: true, mensagem: `Tocando "${r.tocando_agora || r.nome}" no ${r.aparelho}.` };
+  }
+  if (r.motivo === 'sem_aparelho') {
+    const mensagem = 'O Spotify do PC está fechado. Abra o app do Spotify no computador (ou ligue o Jarvis PC, que abre sozinho) e tente de novo.';
+    mostrarSpotify({ nome: busca, url: r.url, alerta: true, detalhe: mensagem });
+    registrarAtividade('Música de inicialização: Spotify do PC fechado', 'erro');
+    return { ok: false, mensagem };
+  }
+  registrarAtividade(`Música de inicialização: ${r.mensagem}`, 'erro');
+  return { ok: false, mensagem: r.mensagem || 'O Spotify não tocou.' };
+}
+
+async function abaixarMusica() {
+  if (!musica.tocando || musica.abaixada) return;
+  musica.abaixada = true;
+  const r = await pedirMusica({ acao: 'volume', volume: VOLUME_CONVERSANDO });
+  if (r.ok) musica.volumeAntes = r.anterior;
+  else musica.abaixada = false;
+}
+
+async function restaurarMusica() {
+  if (!musica.abaixada) return;
+  musica.abaixada = false;
+  if (musica.volumeAntes != null) await pedirMusica({ acao: 'volume', volume: musica.volumeAntes });
+}
+
+async function ouvirMusicaEscolhida() {
+  const saida = $('resultado-teste');
+  saida.className = 'resultado-teste';
+  saida.textContent = 'Pedindo para o Spotify do PC tocar…';
+  const r = await tocarMusicaDeInicio({ busca: $('cfg-musica').value.trim(), tipo: $('cfg-musica-tipo').value });
+  saida.textContent = r.mensagem;
+  saida.classList.add(r.ok ? 'ok' : 'erro');
+}
+
 function resultadoDaFerramenta(chamada) {
   const texto = (chamada.result || []).map((r) => r.text || '').join('');
   try {
@@ -1664,6 +1748,7 @@ async function ligar() {
       onConnect: ({ conversationId }) => {
         conversaId = conversationId;
         registrarAtividade('Link de voz estabelecido', 'ok');
+        abaixarMusica();
       },
       onDisconnect: aoDesconectar,
       onError: (mensagem) => registrarAtividade(`Erro: ${mensagem}`, 'erro'),
@@ -1719,6 +1804,7 @@ function enviarConversaParaMemoria({ keepalive = false } = {}) {
 async function aoDesconectar(detalhes) {
   cancelAnimationFrame(quadroAnimacao);
   conversa = null;
+  restaurarMusica();
   ferramentasAtivas = 0;
   definirEstado('offline');
   document.body.style.setProperty('--nivel', 0);
@@ -1747,6 +1833,9 @@ function abrirConfig() {
   $('cfg-n8n').value = config.n8n;
   $('cfg-agente').value = config.agente;
   $('cfg-camera').checked = !!config.cameraAuto;
+  $('cfg-musica-ligada').checked = !!config.musicaLigada;
+  $('cfg-musica').value = config.musica;
+  $('cfg-musica-tipo').value = config.musicaTipo;
   $('resultado-teste').textContent = '';
   $('resultado-teste').className = 'resultado-teste';
   $('dialog-config').showModal();
@@ -1899,9 +1988,18 @@ $('form-comando').addEventListener('submit', (evento) => {
 $('btn-config').addEventListener('click', abrirConfig);
 $('btn-testar').addEventListener('click', testarConfig);
 $('btn-testar-pc').addEventListener('click', testarPc);
+$('btn-ouvir-musica').addEventListener('click', ouvirMusicaEscolhida);
 $('btn-cancelar-config').addEventListener('click', () => $('dialog-config').close());
 $('form-config').addEventListener('submit', () => {
-  salvarConfig({ chave: $('cfg-chave').value.trim(), n8n: $('cfg-n8n').value.trim(), agente: $('cfg-agente').value.trim(), cameraAuto: $('cfg-camera').checked });
+  salvarConfig({
+    chave: $('cfg-chave').value.trim(),
+    n8n: $('cfg-n8n').value.trim(),
+    agente: $('cfg-agente').value.trim(),
+    cameraAuto: $('cfg-camera').checked,
+    musicaLigada: $('cfg-musica-ligada').checked,
+    musica: $('cfg-musica').value.trim(),
+    musicaTipo: $('cfg-musica-tipo').value,
+  });
   registrarAtividade('Configuração salva', 'ok');
   definirChip('cerebro', 'wait', 'VERIFICANDO');
   carregarContexto();
@@ -1925,6 +2023,10 @@ setInterval(pcStatus, 30 * 1000);
 
 definirEstado('offline');
 particulas();
+// a música toca quando o Jarvis abre (aba nova ou duas palmas), não a cada recarregar a página
+let abriuAgora = true;
+try { abriuAgora = sessionStorage.getItem('jarvis.boot') !== '1'; } catch {}
+if (abriuAgora && config.musicaLigada && config.musica && config.chave && !DEMO) tocarMusicaDeInicio();
 boot().then(async () => {
   if (!config.chave && !DEMO) {
     definirChip('cerebro', 'off', 'SEM CHAVE');

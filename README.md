@@ -41,6 +41,8 @@ py -3 -m http.server 5510
 
 Na engrenagem, cole a chave do cérebro (está em `.jarvis-chave.local.txt`, que **não vai para o GitHub**). `?demo` mostra a interface com dados de exemplo; `?auto` já inicia a conversa.
 
+**Música de inicialização:** na engrenagem, marque "Tocar uma música do Spotify (no PC) ao abrir o Jarvis" e escreva o nome ou cole o link da música/playlist (OUVIR testa na hora). Ela toca no Spotify do computador sempre que o Jarvis abre (aba nova ou duas palmas); se o app estiver fechado, o Jarvis PC abre. Durante a conversa o volume baixa para o microfone não ouvir a música e volta ao fim (webhook `jarvis/musica`).
+
 **Identificação:** ligue o sensor no painel IDENTIDADE e toque em CADASTRAR ROSTO olhando para a câmera. O padrão facial fica salvo só no navegador; dá para desligar o sensor automático na engrenagem.
 
 ## Jarvis PC (controle do computador e duas palmas)
