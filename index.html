@@ -536,12 +536,77 @@
     .btn-ligar{ min-width:0; padding:14px 24px; }
     .reator{ width:min(78vw, 360px); }
   }
+  /* ---------- cena 3D atrás do console e painéis de vidro ---------- */
+  #cena-console{ position:fixed; inset:0; width:100%; height:100%; z-index:0; display:none; }
+  body.cena3d #cena-console{ display:block; }
+  body.cena3d #particulas{ display:none; }
+  body.cena3d::before{ display:none; }
+  body.cena3d .reator svg, body.cena3d .reator .nucleo{ display:none; }
+  body.cena3d .topo{
+    background: linear-gradient(180deg, rgba(4,12,18,0.72), rgba(4,12,18,0.34));
+    backdrop-filter: blur(14px) saturate(1.3);
+    border-bottom:1px solid rgba(170,240,250,0.13);
+    box-shadow: 0 10px 34px -18px rgba(0,0,0,0.9);
+  }
+  body.cena3d .painel{
+    background:
+      linear-gradient(118deg, rgba(255,255,255,0.075) 0%, rgba(255,255,255,0.012) 22%, rgba(255,255,255,0) 40%),
+      linear-gradient(160deg, rgba(26,54,70,0.42) 0%, rgba(6,16,24,0.56) 70%);
+    backdrop-filter: blur(15px) saturate(1.35);
+    border:1px solid rgba(170,240,250,0.16);
+    box-shadow:
+      0 24px 60px -26px rgba(0,0,0,0.95),
+      0 2px 6px -2px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,0.11),
+      inset 0 0 0 1px rgba(0,0,0,0.18),
+      inset 0 -26px 44px -38px rgba(77,232,240,0.32);
+  }
+  body.cena3d .painel::before, body.cena3d .painel::after{ opacity:0.65; }
+  body.cena3d .painel-cab{ border-bottom-color:rgba(170,240,250,0.11); background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent); }
+  /* painéis laterais levemente virados para quem olha, como uma cabine */
+  @media (min-width: 1241px){
+    body.cena3d main{ perspective:1700px; }
+    body.cena3d .col-esq{ transform: translate3d(calc(var(--px, 0) * -5px), calc(var(--py, 0) * -3px), 0) rotateY(2.4deg); transform-origin:0 50%; }
+    body.cena3d .col-dir{ transform: translate3d(calc(var(--px, 0) * 5px), calc(var(--py, 0) * -3px), 0) rotateY(-2.4deg); transform-origin:100% 50%; }
+  }
+  /* a placa de vídeo pediu arrego: tira o desfoque do vidro */
+  body.leve .painel, body.leve .topo{ backdrop-filter:none; background:rgba(6,16,24,0.86); }
+  /* visual foto real: vidro fumê, sem linhas de monitor e câmera com a cor natural */
+  body[data-visual="real"]::after{ display:none; }
+  body[data-visual="real"].cena3d .painel{
+    background:
+      linear-gradient(118deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.015) 24%, rgba(255,255,255,0) 42%),
+      linear-gradient(160deg, rgba(34,40,48,0.5) 0%, rgba(10,13,18,0.62) 70%);
+    border-color:rgba(255,255,255,0.14);
+  }
+  body[data-visual="real"] .scanner video{ filter:none; }
+  body[data-visual="real"] .scanner::after{ background:radial-gradient(ellipse at 50% 48%, transparent 60%, rgba(0,0,0,0.55) 100%); }
+  body[data-visual="real"] .scanner .grade-scan{ display:none; }
+  .btn-visual{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:1.5px; color:var(--cyan); white-space:nowrap; cursor:pointer;
+    background:rgba(9,22,32,0.6); border:1px solid var(--line); border-radius:4px; height:40px; padding:0 12px;
+    transition: background .2s, border-color .2s;
+  }
+  .btn-visual:hover{ border-color:var(--line-hi); background:rgba(77,232,240,0.08); }
+  @media (max-width: 1720px){
+    .btn-visual .longo{ display:none; }
+  }
+  @media (max-width: 820px){
+    .btn-visual{ height:36px; padding:0 8px; font-size:9.5px; }
+  }
+  @media (max-width: 560px){
+    .btn-visual{ width:36px; padding:0; font-size:14px; }
+    .btn-visual .medio{ display:none; }
+  }
+  @media (max-width: 420px){
+    .clima-chip{ display:none; }
+  }
   @media (prefers-reduced-motion: reduce){
     .reator .gira, .reator .nucleo, .led, .linha-scan, .btn-ligar.chamando, .painel, .falas li{ animation:none !important; }
   }
 </style>
 </head>
-<body data-estado="offline">
+<body data-estado="offline" data-visual="holo">
 
   <div class="boot" id="boot" aria-hidden="true"><pre id="boot-texto"></pre></div>
   <template id="modelo-boas-vindas">
@@ -557,6 +622,7 @@
       </div>
     </div>
   </template>
+  <canvas id="cena-console" aria-hidden="true"></canvas>
   <canvas id="particulas" aria-hidden="true"></canvas>
   <div class="avisos" id="avisos" aria-live="polite"></div>
 
@@ -588,6 +654,7 @@
           <span class="desc" id="clima-desc"></span>
         </div>
         <div class="relogio"><div class="hora" id="relogio-hora">--:--</div><div class="data" id="relogio-data"></div></div>
+        <button class="btn-visual" id="btn-visual" type="button" title="Trocar entre holograma e foto real"></button>
         <button class="icon-btn" id="btn-config" type="button" aria-label="Configurações">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -1068,6 +1135,7 @@ function renderizarContexto(ctx) {
     $('clima-icone').innerHTML = iconeClima(clima.agora?.codigo ?? 0);
     $('clima-temp').textContent = `${clima.agora?.temperatura ?? '--'}°`;
     $('clima-desc').textContent = `${clima.agora?.descricao || ''} · ${(clima.cidade || '').split(',')[0]}`;
+    climaAgora = `${clima.agora?.temperatura ?? '--'}° · ${String(clima.agora?.descricao || '').toUpperCase()}`;
   }
 
   const memorias = ctx.memorias || [];
@@ -1154,6 +1222,7 @@ function variaveisPadrao() {
 // ---------- estado visual ----------
 function definirEstado(estado) {
   document.body.dataset.estado = estado;
+  cena3d?.definirEstado(estado);
   const [nucleo, link, sub] = ROTULOS[estado] || ROTULOS.offline;
   $('rotulo-nucleo').textContent = nucleo;
   $('sub-nucleo').textContent = estado === 'offline' && id.confirmado ? 'RENATO IDENTIFICADO · TOQUE EM INICIAR' : sub;
@@ -1199,11 +1268,16 @@ function animar() {
     const lado = canvas.clientWidth * devicePixelRatio;
     if (canvas.width !== lado) { canvas.width = lado; canvas.height = lado; }
     ctx.clearRect(0, 0, lado, lado);
-    if (!conversa) { document.body.style.setProperty('--nivel', 0); return; }
+    if (!conversa) {
+      document.body.style.setProperty('--nivel', 0);
+      cena3d?.definirNivel(0);
+      return;
+    }
 
     const falando = estadoFala === 'falando';
     const nivel = falando ? conversa.getOutputVolume() : conversa.getInputVolume();
     document.body.style.setProperty('--nivel', Math.min(1, nivel * 1.6).toFixed(3));
+    cena3d?.definirNivel(Math.min(1, nivel * 1.6));
 
     const freq = falando ? conversa.getOutputByteFrequencyData() : conversa.getInputByteFrequencyData();
     const barras = 96;
@@ -2181,18 +2255,24 @@ async function usarDispositivos({ acao = 'procurar', alvo = '' } = {}) {
 // ---------- laboratório holográfico (holo.js, carregado só quando abre) ----------
 let holo = null;
 let holoAberto = false;
+let climaAgora = '';
 
 async function abrirHolo() {
   if (holoAberto) return holo.estadoAtual();
   holoAberto = true;
   try {
     holo = holo || await import('./holo.js');
-    const estado = await holo.abrir({ raiz: $('holo'), stream: streamCamera, aoVoltar: fecharHolo });
+    cena3d?.pausar(true);
+    const estado = await holo.abrir({
+      raiz: $('holo'), stream: streamCamera, aoVoltar: fecharHolo, visual, clima: climaAgora,
+      aoTrocarVisual: (modo) => trocarVisual(modo, { noLab: false }),
+    });
     registrarAtividade('Laboratório holográfico aberto', 'ok');
     return estado;
   } catch (erro) {
     holoAberto = false;
     $('holo').hidden = true;
+    cena3d?.pausar(false);
     registrarAtividade(`Laboratório holográfico falhou: ${erro.message}`, 'erro');
     avisar('LABORATÓRIO', 'Não consegui abrir o laboratório holográfico. Confira a internet e tente de novo.');
     throw erro;
@@ -2203,6 +2283,7 @@ function fecharHolo() {
   if (!holoAberto) return;
   holoAberto = false;
   holo?.fechar();
+  cena3d?.pausar(false);
   if (location.hash === '#holo') history.replaceState(null, '', location.pathname + location.search);
   registrarAtividade('De volta ao console', 'ok');
 }
@@ -2223,9 +2304,58 @@ async function usarHolograma({ acao = 'abrir', forma = '' } = {}) {
   if (acao === 'montar') return holo.desmontar(false);
   if (acao === 'girar') return holo.girar(90);
   if (acao === 'centralizar') return holo.centralizar();
+  if (acao === 'foto_real' || acao === 'holograma') {
+    trocarVisual(acao === 'foto_real' ? 'real' : 'holo');
+    return acao === 'foto_real' ? 'Visual foto real ligado.' : 'Visual holograma ligado.';
+  }
   const e = holo.estadoAtual();
   return `Laboratório holográfico aberto, exibindo ${e.forma}. Projeções disponíveis: ${e.formas.join(', ')}. `
     + 'O Renato controla com as mãos: punho gira, pinça dá zoom, mão aberta desmonta, duas mãos ampliam e deslizar troca de projeção.';
+}
+
+// ---------- cena 3D do console e visual (holograma ou foto real) ----------
+let cena3d = null;
+let visual = ler('jarvis.visual', 'holo') === 'real' ? 'real' : 'holo';
+
+function mostrarVisual() {
+  document.body.dataset.visual = visual;
+  $('btn-visual').innerHTML = visual === 'real' ? '◐ <span class="longo">VISUAL </span><span class="medio">HOLOGRAMA</span>' : '◉ <span class="longo">VISUAL </span><span class="medio">FOTO REAL</span>';
+}
+
+function trocarVisual(novo, { noLab = true } = {}) {
+  visual = novo === 'real' ? 'real' : 'holo';
+  guardar('jarvis.visual', visual);
+  mostrarVisual();
+  cena3d?.definirModo(visual);
+  if (noLab && holoAberto) holo?.definirVisual(visual, { avisarConsole: false });
+}
+
+async function iniciarCena3D() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  try {
+    const modulo = await import('./console3d.js');
+    const ligou = modulo.iniciar({
+      canvas: $('cena-console'), alvo: document.querySelector('.reator'), visual,
+      aoDegradar: () => document.body.classList.add('leve'),
+      aoDesistir: () => {
+        cena3d = null;
+        document.body.classList.remove('cena3d');
+      },
+    });
+    if (!ligou) return;
+    cena3d = modulo;
+    document.body.classList.add('cena3d');
+    cena3d.definirEstado(document.body.dataset.estado);
+    if (holoAberto) cena3d.pausar(true);
+    addEventListener('pointermove', (e) => {
+      document.body.style.setProperty('--px', ((e.clientX / innerWidth - 0.5) * 2).toFixed(3));
+      document.body.style.setProperty('--py', ((e.clientY / innerHeight - 0.5) * 2).toFixed(3));
+    });
+    // as fontes mudam a altura do topo: reposiciona o reator quando tudo terminar de assentar
+    document.fonts?.ready.then(() => cena3d?.reposicionar());
+  } catch (erro) {
+    console.warn('Cena 3D indisponível:', erro);
+  }
 }
 
 // ---------- spotify ----------
@@ -2653,6 +2783,7 @@ $('btn-testar').addEventListener('click', testarConfig);
 $('btn-testar-pc').addEventListener('click', testarPc);
 $('btn-ouvir-musica').addEventListener('click', ouvirMusicaEscolhida);
 $('btn-varrer').addEventListener('click', procurarDispositivos);
+$('btn-visual').addEventListener('click', () => trocarVisual(visual === 'real' ? 'holo' : 'real'));
 $('btn-holo').addEventListener('click', () => {
   history.replaceState(null, '', '#holo');
   abrirHolo().catch(() => {});
@@ -2690,8 +2821,10 @@ setInterval(tick, 1000);
 setInterval(() => { if (!conversa) carregarContexto(); }, 5 * 60 * 1000);
 setInterval(pcStatus, 30 * 1000);
 
+mostrarVisual();
 definirEstado('offline');
 particulas();
+iniciarCena3D();
 // a música vale para cada abertura do Jarvis (aba nova ou duas palmas), não a cada recarregar a página;
 // no modo "rosto" ela espera a identificação, se o sensor liga sozinho e há rosto cadastrado
 let abriuAgora = true;

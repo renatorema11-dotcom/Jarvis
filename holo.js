@@ -11,6 +11,10 @@
  *   deslizar a mão rápido  -> troca de projeção
  * Também funciona com mouse/teclado e com a voz (ferramenta "holograma").
  *
+ * Dois visuais, trocados por um botão: HOLOGRAMA (partículas, como no cinema, numa
+ * sala com piso que reflete e luz volumétrica) e FOTO REAL (objetos de verdade,
+ * em holo-real.js). A Terra usa o sol de agora e a posição real da ISS.
+ *
  * Carregado só quando o laboratório abre (import dinâmico no index.html, que
  * define o importmap de "three").
  */
@@ -19,27 +23,23 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { COR, placaFraca, materialLinha, circulo, brilho, texturaBrilho, criarSala, criarLente, ambienteEstudio, criarSom } from './cena.js';
+import { criarReal } from './holo-real.js';
 
 // ---------------- CONFIG ----------------
 const VISAO = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';
 const MODELO_MAOS = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-const TOTAL = 26000;              // toda projeção usa o mesmo tanto de partículas, para uma virar a outra
+// toda projeção usa o mesmo tanto de partículas, para uma virar a outra; o total depende da placa de vídeo
+const TOTAL_NORMAL = 60000;
+const TOTAL_LEVE = 20000;
+const ISS_URL = 'https://api.wheretheiss.at/v1/satellites/25544';
 const MARCADOR = { nome: 'Campo Mourão · PR', lat: -24.05, lon: -52.38 };
 // ----------------------------------------
 
-const COR = {
-  ciano: new THREE.Color('#4de8f0'),
-  azul: new THREE.Color('#2f7bff'),
-  branco: new THREE.Color('#e8fdff'),
-  laranja: new THREE.Color('#ffa24c'),
-  verde: new THREE.Color('#5dfca0'),
-  violeta: new THREE.Color('#b794ff'),
-  ouro: new THREE.Color('#ffd89a'),
-};
 const LIGACOES_MAO = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
   [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
-const CORES_GESTO = { punho: '#ffa24c', pinca: '#5dfca0', aberta: '#4de8f0', nenhum: '#8ff3f7' };
-const NOMES_GESTO = { punho: 'PUNHO · GIRAR', pinca: 'PINÇA · ZOOM', aberta: 'MÃO ABERTA · DESMONTAR', dupla: 'DUAS MÃOS · ESCALA', nenhum: '—' };
+const CORES_GESTO = { punho: '#ffa24c', pinca: '#5dfca0', aberta: '#4de8f0', aponta: '#b794ff', nenhum: '#8ff3f7' };
+const NOMES_GESTO = { punho: 'PUNHO · GIRAR', pinca: 'PINÇA · ZOOM', aberta: 'MÃO ABERTA · DESMONTAR', aponta: 'DEDO · TOCAR', dupla: 'DUAS MÃOS · ESCALA', nenhum: '—' };
 
 // ---------------- estado ----------------
 const L = {
@@ -48,7 +48,37 @@ const L = {
   raiz: null,
   aoVoltar: null,
   quadro: 0,
-  relogio: new THREE.Clock(),
+  ultimoQuadro: 0,
+  tempo: 0,
+  modo: 'holo',         // 'holo' (holograma de cinema) ou 'real' (foto real)
+  som: criarSom(),
+  sala: null,
+  estrelas: null,
+  raios: null,
+  raiosEm: 0,
+  neblina: null,
+  luzSol: null,
+  luzCeu: null,
+  lente: null,
+  intro: 1,
+  camZ: 11,
+  ponteiro: { x: 0, y: 0 },
+  paralaxe: { x: 0, y: 0 },
+  opNuvem: 1,
+  solAtivo: 0,
+  proximoGlitch: 0,
+  glitchAte: 0,
+  dedoForca: 0,
+  dedoAlvo: 0,
+  gestoAntes: 'nenhum',
+  rotulosDom: [],
+  clima: '',
+  aoTrocarVisual: null,
+  economia: false,
+  placaFraca: false,
+  economiaDesde: 0,
+  tentativasEconomia: 0,
+  lentoDesde: 0,
   renderer: null,
   composer: null,
   bloom: null,
@@ -87,6 +117,10 @@ const L = {
   hud: {},
 };
 
+let TOTAL = TOTAL_NORMAL;
+let Q = TOTAL / 26000;
+const q = (n) => Math.round(n * Q);   // as formas foram pensadas para 26 mil partículas
+
 // ---------------- formas ----------------
 function gerador() {
   const posicoes = new Float32Array(TOTAL * 3);
@@ -124,38 +158,6 @@ function esferaFibonacci(quantos, cada) {
   }
 }
 
-function materialLinha(cor, opacidade = 0.35) {
-  return new THREE.LineBasicMaterial({ color: cor, transparent: true, opacity: opacidade, blending: THREE.AdditiveBlending, depthWrite: false });
-}
-
-function circulo(raio, segmentos = 128, cor = COR.ciano, opacidade = 0.35) {
-  const pts = [];
-  for (let i = 0; i < segmentos; i++) {
-    const a = (i / segmentos) * Math.PI * 2;
-    pts.push(new THREE.Vector3(Math.cos(a) * raio, 0, Math.sin(a) * raio));
-  }
-  return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), materialLinha(cor, opacidade));
-}
-
-function texturaBrilho() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const g = c.getContext('2d');
-  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grad.addColorStop(0, 'rgba(255,255,255,1)');
-  grad.addColorStop(0.25, 'rgba(160,250,255,0.6)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(c);
-}
-
-function brilho(cor, tamanho) {
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaBrilho(), color: cor, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-  s.scale.setScalar(tamanho);
-  return s;
-}
-
 // continentes em 240×120 (equirretangular), tirados do mapa especular do three.js: cada linha são
 // trechos alternados oceano/terra, começando no oceano, com o tamanho em base 36 (2 caracteres)
 const CONTINENTES = '6o,6o,6o,6o,6o,1r0g0702010f3s,1l02020a060r010224021j,1s05080t0n0302022w,1k010605060v3r,16020202080b0e0p290819,12040e040n0n1f010l0d01011a,110301040202040201010303010202010e0k01011f010902070t0a020o,00010e010p090602040a0e0h01011f0108040101020x020a01020i01,0b0f0702020203090601050204050a01010i0u070j02030d011b080402,0002080x06010704020206040b0d0w0f03020302010c01080115020i,0005070r010p06010105070c0w0c0204030i011z,0302040t0206010e0a04020108070c050j050306032m,0d0s010c01050303060509070c040i070208012m01,0b0z010b0g010c050x07022m020802,0c0u020d0c030i010x070302060101280301020406,0f020b0t0c051e0201040806011x0p,0f010e0l01060b0912020a030509011v0d020c,0v0u080a1202090105250d040c,0v01010u05090102120107010101051m010i0d030d,0y0k010a030e0w020202051v010j0c020e,0z1a1103022j0a010f,0z141a2l01010o,120n020e04030x2p0q,120l050d160q011v0r,120o050b150l020102070403010901160s,120o01020108020116070101020907050304031e0t,110p010a1508060103070805031g07020o,120y17070701030603020405021f0y,120w18060a010202030f0317030309010p,120w18060e01030a01040317050108010q,130u220701030219040105030q,140t1f070h1k14,160p1c0c0h1k07020v,1601010m1c0e0g1l13,190f03021d0h0205041m14,190b09011b13021b13,180101090a011a0u0208031914,190101081k0v020a051514,1c071j0x02090b0y15,1d051k0x030d0701010u16,1e050c01150z020d07020109030e19,1e0505020701130z030c0a0904091d,1f0503030a020z10020b0b07070702021a,1h081d1002080d0608081d,1j0102031c1103050f050b071c,1o04191202020j030d071b,1q02190k010i0m030f051b,1r011a130m020g031c,1s01050601020w1201040h021v,1w0c0w151d0210,1w0d0w08020u2f,1x0g0t020201050s0w010201090215,1x0h150o0y010201070216,1w0i150n1001070515,1v0j150m10030506010311,1v0l120f0205130204050a010v,1v0n110e0105150203050201070102020r,1v0r0y0i17010a0108070o,1u0t0x0i1u050n,1v0t0x0h19010k060m,1w0s0x0h1v0301010m,1w0s0x0h2m,1x0q0z0c02032l,1x0p0z0d02031p030t,1y0o0z0i05021h0305010o,1z0n0y0i05021e0804010o,200m0y0h04041d0b01030l0101,210l0z0f06031c0g0n,210k100e07021b0k0l,210k110d0603190m0l,210h140d0603180o0k,210f160d0603180p0j,210e170b1j0q0i,210e180a1j0q0i,200f180a1k0p0i,200e1a081l0p0i,200d1b071m06060d0i,200c1d011r030a0101080k,20093o070k,1z0b3n070k,1z0a4b0202,20074e0102,1z063w010h0104,1z063w010g0105,1z064c0106,1z044c0207,1y064k,1y054l,1y054l,1z034m,20024m,22014l,6o,6o,6o,6o,6o,6o,26014h,240125040m0c0105050201080q,2301200j061a0l,20071r02020k051j0e,200201041001051a011s08,1i020g0201040x3d07,12030b0r0s3f0a,0r1c0t3h0b,0l1c02030q3l0b,0h1c0l030a3k0d,0m1a0v3k0d,0j1j0c02053q0d,0i5y08,00090j5w,006o,006o,006o';
@@ -188,7 +190,7 @@ function formaTerra() {
     const l = lon + giro;
     return [Math.cos(lat) * Math.sin(l) * r, Math.sin(lat) * r, Math.cos(lat) * Math.cos(l) * r];
   };
-  esferaFibonacci(64000, (x, y, z) => {
+  esferaFibonacci(q(64000), (x, y, z) => {
     const lat = Math.asin(y);
     const lon = Math.atan2(x, z);
     if (terra(lat, lon)) g.add(...pos(lat, lon, R), Math.random() < 0.7 ? COR.ciano : COR.branco, 0.75 + Math.random() * 0.45);
@@ -228,45 +230,99 @@ function formaTerra() {
   const halo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.12, 64, 64), new THREE.ShaderMaterial({
     uniforms: { uCor: { value: COR.ciano } },
     vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
-    fragmentShader: 'uniform vec3 uCor; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 4.0) * 0.3; gl_FragColor = vec4(uCor * f, f); }',
+    fragmentShader: 'uniform vec3 uCor; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(max(1.0 - abs(dot(vN, vV)), 0.0), 4.0) * 0.3; gl_FragColor = vec4(uCor * f, f); }',
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide,
   }));
   linhas.add(halo);
 
-  // órbitas de satélites
-  const orbitas = [];
-  for (const [raio, inclinacao, giroOrbita] of [[2.9, 0.5, 0.2], [3.4, -0.9, 1.4]]) {
-    const anel = circulo(raio, 160, COR.ciano, 0.28);
-    anel.rotation.set(inclinacao, giroOrbita, 0);
-    const satelite = brilho(COR.branco, 0.32);
-    linhas.add(anel, satelite);
-    orbitas.push({ anel, satelite, raio, velocidade: 0.5 / raio * 2 });
-  }
+  // o que aparece nos dois visuais: o marcador da cidade e a ISS de verdade
+  const comuns = new THREE.Group();
 
-  // marcador da cidade do Renato
   const [mx, my, mz] = pos(THREE.MathUtils.degToRad(MARCADOR.lat), THREE.MathUtils.degToRad(MARCADOR.lon), R);
   const normal = new THREE.Vector3(mx, my, mz).normalize();
-  const haste = new THREE.Line(new THREE.BufferGeometry().setFromPoints([normal.clone().multiplyScalar(R), normal.clone().multiplyScalar(R * 1.35)]), materialLinha(COR.laranja, 0.9));
+  const topoMarcador = normal.clone().multiplyScalar(R * 1.28);
+  const haste = new THREE.Line(new THREE.BufferGeometry().setFromPoints([normal.clone().multiplyScalar(R), topoMarcador]), materialLinha(COR.laranja, 0.9));
   const pulso = circulo(0.14, 48, COR.laranja, 0.9);
-  pulso.position.copy(normal.clone().multiplyScalar(R * 1.01));
+  pulso.position.copy(normal.clone().multiplyScalar(R * 1.012));
   pulso.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
-  const ponta = brilho(COR.laranja, 0.35);
-  ponta.position.copy(normal.clone().multiplyScalar(R * 1.35));
-  linhas.add(haste, pulso, ponta);
+  const ponta = brilho(COR.laranja, 0.3);
+  ponta.position.copy(topoMarcador);
+  comuns.add(haste, pulso, ponta);
+
+  // a ISS: posição real a cada poucos segundos; o plano da órbita sai de duas posições seguidas
+  const RAIO_ISS = R * 1.16;
+  const estacao = brilho(COR.branco, 0.26);
+  estacao.visible = false;
+  const anelIss = circulo(RAIO_ISS, 180, COR.ciano, 0.32);
+  anelIss.visible = false;
+  comuns.add(estacao, anelIss);
+  const iss = { dados: null, alvo: new THREE.Vector3(), anterior: null };
+  const atualizarIss = async () => {
+    try {
+      const d = await fetch(ISS_URL).then((r) => r.json());
+      if (typeof d.latitude !== 'number') return;
+      iss.dados = d;
+      const novo = new THREE.Vector3(...pos(THREE.MathUtils.degToRad(d.latitude), THREE.MathUtils.degToRad(d.longitude), RAIO_ISS));
+      if (!estacao.visible) estacao.position.copy(novo);
+      estacao.visible = true;
+      if (iss.anterior && iss.anterior.distanceTo(novo) > 0.002) {
+        anelIss.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), iss.anterior.clone().cross(novo).normalize());
+        anelIss.visible = true;
+      }
+      iss.anterior = novo.clone();
+      iss.alvo.copy(novo);
+    } catch {
+      // sem internet a estação só não aparece
+    }
+  };
+
+  // o sol de agora: ponto da Terra onde ele está a pino (aproximação boa para ver dia e noite)
+  const direcaoSol = new THREE.Vector3(1, 0, 0);
+  const atualizarSol = () => {
+    const d = new Date();
+    const dia = (d - Date.UTC(d.getUTCFullYear(), 0, 0)) / 864e5;
+    const declinacao = THREE.MathUtils.degToRad(-23.44 * Math.cos((2 * Math.PI / 365) * (dia + 10)));
+    const horas = d.getUTCHours() + d.getUTCMinutes() / 60;
+    const lon = THREE.MathUtils.degToRad(-15 * (horas - 12));
+    direcaoSol.set(...pos(declinacao, lon, 1)).normalize();
+  };
+  atualizarSol();
+  const eDia = () => normal.dot(direcaoSol) > 0;
 
   return {
-    chave: 'terra', codigo: 'GEO-01', titulo: 'TERRA',
-    descricao: `Globo com os continentes em partículas, órbitas de satélites e marcador em ${MARCADOR.nome}.`,
-    dados: [['Partículas', TOTAL.toLocaleString('pt-BR')], ['Raio', '6.371 km'], ['Marcador', MARCADOR.nome], ['Satélites', '2 em órbita']],
-    posicoes: g.posicoes, cores: g.cores, linhas,
+    chave: 'terra', codigo: 'GEO-01', titulo: 'TERRA', solAtivo: true,
+    sol: () => direcaoSol,
+    descricao: `Continentes de verdade, dia e noite conforme o sol de agora, a ISS na posição real e marcador em ${MARCADOR.nome}.`,
+    dados: () => [
+      ['Partículas', TOTAL.toLocaleString('pt-BR')],
+      ['Em Campo Mourão', eDia() ? 'DIA' : 'NOITE'],
+      ['ISS', iss.dados ? `${Math.round(iss.dados.altitude)} km` : 'LOCALIZANDO'],
+      ['Velocidade', iss.dados ? `${Math.round(iss.dados.velocity).toLocaleString('pt-BR')} km/h` : '—'],
+    ],
+    posicoes: g.posicoes, cores: g.cores, linhas, comuns,
+    opcoesReal: { giro, sol: () => direcaoSol },
+    rotulos: [
+      { titulo: 'CAMPO MOURÃO', valor: () => L.clima || `${Math.abs(MARCADOR.lat).toFixed(1)}°S ${Math.abs(MARCADOR.lon).toFixed(1)}°O`, ponto: () => topoMarcador, frente: true },
+      { titulo: 'ISS', valor: () => (iss.dados ? `${Math.round(iss.dados.altitude)} KM · ${Math.round(iss.dados.velocity).toLocaleString('pt-BR')} KM/H` : ''), ponto: () => estacao.position, frente: true, visivel: () => !!iss.dados },
+    ],
+    aoEntrar() {
+      atualizarSol();
+      atualizarIss();
+      clearInterval(L.relogioIss);
+      L.relogioIss = setInterval(() => {
+        if (!L.aberto) return;
+        atualizarSol();
+        atualizarIss();
+      }, 5000);
+    },
+    aoSair() {
+      clearInterval(L.relogioIss);
+    },
     animar(t) {
-      for (const o of orbitas) {
-        const a = t * o.velocidade;
-        o.satelite.position.set(Math.cos(a) * o.raio, 0, Math.sin(a) * o.raio).applyEuler(o.anel.rotation);
-      }
       const s = 1 + ((t * 0.9) % 1) * 2.2;
       pulso.scale.setScalar(s);
       pulso.material.userData.pulso = 1 - ((t * 0.9) % 1);
+      if (estacao.visible) estacao.position.lerp(iss.alvo, 0.04);
     },
   };
 }
@@ -279,7 +335,7 @@ function formaSaturno() {
     v.set(x, y, z).applyEuler(inclina);
     g.add(v.x, v.y, v.z, cor, b);
   };
-  esferaFibonacci(8000, (x, y, z) => {
+  esferaFibonacci(q(8000), (x, y, z) => {
     const faixa = 0.5 + 0.5 * Math.sin(y * 16 + Math.sin(y * 5) * 2);
     const cor = COR.ouro.clone().lerp(COR.ciano, 0.35 + faixa * 0.4);
     add(x * 1.45, y * 1.32, z * 1.45, cor, 0.55 + faixa * 0.55);
@@ -302,7 +358,12 @@ function formaSaturno() {
     chave: 'saturno', codigo: 'AST-02', titulo: 'SATURNO',
     descricao: 'Gigante gasoso com faixas na atmosfera e anéis de fragmentos, com a divisão de Cassini.',
     dados: [['Partículas', TOTAL.toLocaleString('pt-BR')], ['Inclinação', '26,7°'], ['Anéis', 'A, B e C'], ['Luas', '146 conhecidas']],
-    posicoes: g.posicoes, cores: g.cores, linhas, animar() {},
+    posicoes: g.posicoes, cores: g.cores, linhas,
+    rotulos: [
+      { titulo: 'ANEL B', valor: 'O MAIS DENSO', ponto: () => new THREE.Vector3(Math.cos(3.6) * 2.5, 0, Math.sin(3.6) * 2.5).applyEuler(inclina), frente: false },
+      { titulo: 'DIVISÃO DE CASSINI', valor: '4.800 KM', ponto: () => new THREE.Vector3(Math.cos(0.5) * 2.96, 0, Math.sin(0.5) * 2.96).applyEuler(inclina), frente: false },
+    ],
+    animar() {},
   };
 }
 
@@ -310,26 +371,26 @@ function formaReator() {
   const g = gerador();
   const polar = (r, a, z, cor, b) => g.add(Math.cos(a) * r, Math.sin(a) * r, z, cor, b);
   // núcleo
-  for (let i = 0; i < 3200; i++) {
+  for (let i = 0; i < q(3200); i++) {
     const r = Math.pow(Math.random(), 0.7) * 0.55;
     polar(r, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.25, COR.branco, 1.1 - r);
   }
   // anel interno
-  for (let i = 0; i < 2600; i++) polar(1.0 + Math.random() * 0.2, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.18, COR.ciano, 0.9);
+  for (let i = 0; i < q(2600); i++) polar(1.0 + Math.random() * 0.2, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.18, COR.ciano, 0.9);
   // dez bobinas
   for (let b = 0; b < 10; b++) {
     const centro = (b / 10) * Math.PI * 2;
-    for (let i = 0; i < 1250; i++) {
+    for (let i = 0; i < q(1250); i++) {
       const r = 1.38 + Math.random() * 0.78;
       const a = centro + (Math.random() - 0.5) * THREE.MathUtils.degToRad(24);
       polar(r, a, (Math.random() - 0.5) * 0.32, COR.ciano.clone().lerp(COR.branco, Math.random() * 0.4), 0.55 + (r - 1.38) * 0.4);
     }
   }
   // carcaça
-  for (let i = 0; i < 3000; i++) polar(2.32 + Math.random() * 0.2, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.4, COR.azul.clone().lerp(COR.ciano, 0.5), 0.7);
+  for (let i = 0; i < q(3000); i++) polar(2.32 + Math.random() * 0.2, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.4, COR.azul.clone().lerp(COR.ciano, 0.5), 0.7);
   // triângulo central
   const vertices = [0, 1, 2].map((i) => (i / 3) * Math.PI * 2 + Math.PI / 2);
-  for (let i = 0; i < 1500; i++) {
+  for (let i = 0; i < q(1500); i++) {
     const lado = i % 3;
     const t = Math.random();
     const a1 = vertices[lado];
@@ -362,6 +423,10 @@ function formaReator() {
     descricao: 'Núcleo de energia em anel: dez bobinas, triângulo central e núcleo pulsante.',
     dados: [['Partículas', TOTAL.toLocaleString('pt-BR')], ['Bobinas', '10'], ['Saída', '3 GJ/s'], ['Estado', 'ESTÁVEL']],
     posicoes: g.posicoes, cores: g.cores, linhas,
+    rotulos: [
+      { titulo: 'NÚCLEO', valor: () => `${(3 + Math.sin(performance.now() / 900) * 0.04).toFixed(2)} GJ/S`, ponto: () => new THREE.Vector3(0.1, 0.1, 0.25), frente: false },
+      { titulo: 'BOBINA 03', valor: () => `CARGA ${Math.round(97 + Math.sin(performance.now() / 1300) * 2)}%`, ponto: () => new THREE.Vector3(Math.cos(0.6) * 1.8, Math.sin(0.6) * 1.8, 0.2), frente: false },
+    ],
     animar(t) {
       anelGiro.rotation.z = t * 0.35;
       triangulo.material.userData.pulso = 0.75 + 0.25 * Math.sin(t * 3.2);
@@ -376,7 +441,7 @@ function formaAtomo() {
   for (let i = 0; i < 40; i++) nucleons.push(new THREE.Vector3().randomDirection().multiplyScalar(Math.cbrt(Math.random()) * 0.42));
   nucleons.forEach((c, i) => {
     const cor = i % 2 ? COR.laranja : COR.ciano;
-    for (let k = 0; k < 120; k++) {
+    for (let k = 0; k < q(120); k++) {
       const p = new THREE.Vector3().randomDirection().multiplyScalar(Math.cbrt(Math.random()) * 0.15).add(c);
       g.add(p.x, p.y, p.z, cor, 0.9);
     }
@@ -386,7 +451,7 @@ function formaAtomo() {
   const elipse = (a, alvo) => alvo.set(Math.cos(a) * 2.7, Math.sin(a) * 1.05, 0);
   const v = new THREE.Vector3();
   for (const e of orbitas) {
-    for (let k = 0; k < 3200; k++) {
+    for (let k = 0; k < q(3200); k++) {
       elipse(Math.random() * Math.PI * 2, v).add(new THREE.Vector3().randomDirection().multiplyScalar(0.03)).applyEuler(e);
       g.add(v.x, v.y, v.z, COR.ciano, 0.32);
     }
@@ -412,6 +477,10 @@ function formaAtomo() {
     descricao: 'Modelo atômico: núcleo de prótons e nêutrons, três órbitas e a nuvem de elétrons.',
     dados: [['Partículas', TOTAL.toLocaleString('pt-BR')], ['Núcleons', '40'], ['Órbitas', '3'], ['Elétrons', '3']],
     posicoes: g.posicoes, cores: g.cores, linhas,
+    rotulos: [
+      { titulo: 'NÚCLEO', valor: '20 PRÓTONS · 20 NÊUTRONS', ponto: () => new THREE.Vector3(0.2, 0.25, 0.2), frente: false },
+      { titulo: 'ELÉTRON', valor: 'ÓRBITA 1', ponto: () => eletrons[0].eletron.position, frente: false },
+    ],
     animar(t) {
       for (const o of eletrons) {
         elipse(t * o.velocidade + o.fase, o.eletron.position).applyEuler(o.e);
@@ -429,7 +498,7 @@ function formaDna() {
     const a = t * voltas * Math.PI * 2 + fase;
     return new THREE.Vector3(Math.cos(a) * raio, (t - 0.5) * altura, Math.sin(a) * raio);
   };
-  for (let i = 0; i < 15000; i++) {
+  for (let i = 0; i < q(15000); i++) {
     const t = Math.random();
     const lado = i % 2;
     const p = fita(t, lado ? Math.PI : 0).add(new THREE.Vector3().randomDirection().multiplyScalar(Math.random() * 0.09));
@@ -443,7 +512,7 @@ function formaDna() {
     const a = fita(t, 0);
     const b = fita(t, Math.PI);
     const [c1, c2] = coresPares[k % 2];
-    for (let i = 0; i < 170; i++) {
+    for (let i = 0; i < q(170); i++) {
       const u = Math.random();
       const p = a.clone().lerp(b, u);
       g.add(p.x, p.y, p.z, u < 0.5 ? c1 : c2, 0.75);
@@ -463,7 +532,12 @@ function formaDna() {
     chave: 'dna', codigo: 'BIO-05', titulo: 'DNA',
     descricao: 'Dupla hélice com quarenta pares de bases ligando as duas fitas.',
     dados: [['Partículas', TOTAL.toLocaleString('pt-BR')], ['Pares de bases', '40'], ['Voltas', '3,2'], ['Fitas', '2']],
-    posicoes: g.posicoes, cores: g.cores, linhas, animar() {},
+    posicoes: g.posicoes, cores: g.cores, linhas,
+    rotulos: [
+      { titulo: 'PAR A–T', valor: 'ADENINA · TIMINA', ponto: () => fita(0.72, 0), frente: false },
+      { titulo: 'PAR G–C', valor: 'GUANINA · CITOSINA', ponto: () => fita(0.3, Math.PI), frente: false },
+    ],
+    animar() {},
   };
 }
 
@@ -496,7 +570,7 @@ function formaCidade() {
   }
   const comprimento = arestas.reduce((soma, a) => soma + Math.hypot(a[3] - a[0], a[4] - a[1], a[5] - a[2]), 0);
   for (const a of arestas) {
-    const qtd = Math.round((Math.hypot(a[3] - a[0], a[4] - a[1], a[5] - a[2]) / comprimento) * 10000);
+    const qtd = Math.round((Math.hypot(a[3] - a[0], a[4] - a[1], a[5] - a[2]) / comprimento) * q(10000));
     for (let i = 0; i < qtd; i++) {
       const t = Math.random();
       const y = THREE.MathUtils.lerp(a[1], a[4], t);
@@ -504,7 +578,7 @@ function formaCidade() {
     }
   }
   // janelas acesas nas fachadas
-  for (let i = 0; i < 4000; i++) {
+  for (let i = 0; i < q(4000); i++) {
     const p = predios[Math.floor(Math.random() * predios.length)];
     const s = p.lado / 2;
     const face = Math.floor(Math.random() * 4);
@@ -534,12 +608,17 @@ function formaCidade() {
     [[-3, -3], [3, -3], [3, 3], [-3, 3]].map(([x, z]) => new THREE.Vector3(x, 0, z))), materialLinha(COR.verde, 0.7));
   varredura.add(lamina, contorno);
   linhas.add(varredura);
-  const maisAlto = Math.max(...predios.map((p) => p.h));
+  const torre = predios.reduce((a, b) => (b.h > a.h ? b : a));
+  const maisAlto = torre.h;
   return {
     chave: 'cidade', codigo: 'URB-06', titulo: 'CIDADE',
     descricao: 'Mapa urbano volumétrico de 121 quadras, com varredura de altura.',
     dados: [['Partículas', TOTAL.toLocaleString('pt-BR')], ['Quadras', String(predios.length)], ['Torre mais alta', `${Math.round(maisAlto * 100)} m`], ['Varredura', 'ATIVA']],
     posicoes: g.posicoes, cores: g.cores, linhas,
+    opcoesReal: { predios, base },
+    rotulos: [
+      { titulo: 'TORRE CENTRAL', valor: `${Math.round(maisAlto * 100)} M`, ponto: () => new THREE.Vector3(torre.x, base + torre.h, torre.z), frente: false },
+    ],
     animar(t) {
       varredura.position.y = base + (0.5 - 0.5 * Math.cos(t * 0.8)) * 3.3;
     },
@@ -563,15 +642,16 @@ function criarNuvem() {
   geo.setAttribute('corDestino', new THREE.BufferAttribute(vazio.slice(), 3));
   geo.setAttribute('direcao', new THREE.BufferAttribute(direcao, 3));
   geo.setAttribute('semente', new THREE.BufferAttribute(semente, 1));
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 12);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 14);
   const material = new THREE.ShaderMaterial({
     uniforms: {
       uTempo: { value: 0 }, uMorph: { value: 1 }, uExplosao: { value: 0 }, uAtracao: { value: 0 },
-      uAtrator: { value: new THREE.Vector3() }, uTamanho: { value: 0.075 }, uPixel: { value: 1 }, uOpacidade: { value: 1 },
+      uAtrator: { value: new THREE.Vector3() }, uTamanho: { value: 0.075 * Math.sqrt(26000 / TOTAL) }, uPixel: { value: 1 }, uOpacidade: { value: 1 },
+      uGlitch: { value: 0 }, uSol: { value: new THREE.Vector3(1, 0, 0) }, uSolAtivo: { value: 0 }, uDedo: { value: new THREE.Vector3(99, 99, 99) }, uDedoForca: { value: 0 },
     },
     vertexShader: `
-      uniform float uTempo, uMorph, uExplosao, uAtracao, uTamanho, uPixel;
-      uniform vec3 uAtrator;
+      uniform float uTempo, uMorph, uExplosao, uAtracao, uTamanho, uPixel, uGlitch, uSolAtivo, uDedoForca;
+      uniform vec3 uAtrator, uSol, uDedo;
       attribute vec3 destino, cor, corDestino, direcao;
       attribute float semente;
       varying vec3 vCor;
@@ -582,14 +662,27 @@ function criarNuvem() {
         p += direcao * uExplosao;
         p += vec3(sin(uTempo * 0.8 + semente * 6.28), cos(uTempo * 0.7 + semente * 9.0), sin(uTempo * 0.9 + semente * 3.0)) * 0.12 * uExplosao;
         p = mix(p, uAtrator + direcao * 0.35, uAtracao * (0.45 + 0.55 * semente));
+        // o dedo empurra o holograma e abre uma onda em volta
+        vec3 dv = p - uDedo;
+        float dd = dot(dv, dv);
+        p += normalize(dv + vec3(0.0001)) * uDedoForca * exp(-dd * 2.4) * (0.55 + 0.2 * sin(sqrt(dd) * 12.0 - uTempo * 9.0));
+        // falha de projeção de vez em quando: faixas horizontais escorregam
+        float faixa = step(0.82, fract(p.y * 3.0 + uTempo * 11.0));
+        p.x += uGlitch * faixa * (semente - 0.5) * 0.9;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         gl_PointSize = max(1.2, uTamanho * uPixel * (0.7 + semente * 0.8) * (300.0 / -mv.z));
         float cintila = 0.78 + 0.22 * sin(uTempo * 2.6 + semente * 50.0);
+        // faixas de interferência e uma linha de varredura subindo, como num projetor de verdade
+        float bandas = 0.84 + 0.16 * sin(p.y * 26.0 - uTempo * 3.4);
+        float varre = smoothstep(0.03, 0.0, abs(fract(p.y * 0.11 - uTempo * 0.09) - 0.5));
         // o lado de trás da projeção fica mais apagado: dá profundidade e não estoura o brilho
         float centro = (modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).z;
         float atras = clamp((centro - mv.z) / 2.5, 0.0, 1.0);
-        vCor = mix(cor, corDestino, m) * cintila * (1.0 - atras * 0.72) * 0.72;
+        // na Terra, o lado da noite fica escuro de verdade
+        float dia = smoothstep(-0.12, 0.3, dot(normalize(destino + vec3(0.0001)), uSol));
+        float luz = mix(1.0, 0.16 + 0.84 * dia, uSolAtivo * m);
+        vCor = mix(cor, corDestino, m) * cintila * bandas * (1.0 + varre * 1.4) * (1.0 - atras * 0.72) * 0.72 * luz;
       }`,
     fragmentShader: `
       uniform float uOpacidade;
@@ -598,6 +691,7 @@ function criarNuvem() {
         float d = length(gl_PointCoord - 0.5);
         float a = smoothstep(0.5, 0.0, d);
         gl_FragColor = vec4(vCor, a * a * uOpacidade);
+        #include <colorspace_fragment>
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
@@ -608,69 +702,145 @@ function criarNuvem() {
 function criarMesa() {
   const mesa = new THREE.Group();
   mesa.position.y = -2.55;
-  for (const [r, o] of [[0.75, 0.9], [1.3, 0.5], [2.3, 0.35], [3.15, 0.55], [3.35, 0.25]]) mesa.add(circulo(r, 160, COR.ciano, o));
+
+  // a mesa em si, de metal: aparece nos dois visuais
+  const perfil = [[2.92, 0], [2.97, 0.11], [3.42, 0.11], [3.54, 0.04], [3.54, 0]].map(([r, y]) => new THREE.Vector2(r, y));
+  const metal = new THREE.Mesh(new THREE.LatheGeometry(perfil, 128), new THREE.MeshStandardMaterial({ color: '#39424c', metalness: 1, roughness: 0.36 }));
+  mesa.add(metal);
+  const fundo = new THREE.Mesh(new THREE.CircleGeometry(2.96, 96), new THREE.MeshStandardMaterial({ color: '#0b1016', metalness: 0.9, roughness: 0.28 }));
+  fundo.rotation.x = -Math.PI / 2;
+  fundo.position.y = 0.05;
+  mesa.add(fundo);
+
+  // marcas no piso em volta da mesa
+  const chao = [];
+  for (const r of [4.6, 6.2, 8.4, 11]) {
+    for (let i = 0; i < 128; i++) {
+      const a1 = (i / 128) * Math.PI * 2;
+      const a2 = ((i + 1) / 128) * Math.PI * 2;
+      chao.push(Math.cos(a1) * r, 0.01, Math.sin(a1) * r, Math.cos(a2) * r, 0.01, Math.sin(a2) * r);
+    }
+  }
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    chao.push(Math.cos(a) * 3.7, 0.01, Math.sin(a) * 3.7, Math.cos(a) * 11, 0.01, Math.sin(a) * 11);
+  }
+  const geoChao = new THREE.BufferGeometry();
+  geoChao.setAttribute('position', new THREE.Float32BufferAttribute(chao, 3));
+  mesa.add(new THREE.LineSegments(geoChao, materialLinha(COR.azul, 0.07)));
+
+  // o que só existe com o projetor ligado (visual holograma)
+  const holoMesa = new THREE.Group();
+  mesa.add(holoMesa);
+  const aneis = new THREE.Group();
+  aneis.position.y = 0.12;
+  for (const [r, o] of [[0.75, 0.9], [1.3, 0.5], [2.3, 0.35], [2.88, 0.6]]) aneis.add(circulo(r, 160, COR.ciano, o));
+  holoMesa.add(aneis);
   const marcas = [];
   for (let i = 0; i < 120; i++) {
     const a = (i / 120) * Math.PI * 2;
-    const r2 = i % 10 === 0 ? 2.95 : 3.05;
-    marcas.push(Math.cos(a) * r2, 0, Math.sin(a) * r2, Math.cos(a) * 3.15, 0, Math.sin(a) * 3.15);
+    const r2 = i % 10 === 0 ? 2.58 : 2.68;
+    marcas.push(Math.cos(a) * r2, 0.12, Math.sin(a) * r2, Math.cos(a) * 2.8, 0.12, Math.sin(a) * 2.8);
   }
   const geoMarcas = new THREE.BufferGeometry();
   geoMarcas.setAttribute('position', new THREE.Float32BufferAttribute(marcas, 3));
   const anelMarcas = new THREE.LineSegments(geoMarcas, materialLinha(COR.ciano, 0.45));
-  mesa.add(anelMarcas);
+  holoMesa.add(anelMarcas);
+
   const emissor = brilho(COR.ciano, 1.1);
   emissor.material.opacity = 0.55;
-  emissor.position.y = 0.05;
-  mesa.add(emissor);
+  emissor.position.y = 0.16;
+  holoMesa.add(emissor);
+
+  // lentes em volta da mesa, de onde saem os raios da projeção
+  const emissoresPos = [];
+  const emissores = [];
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const p = new THREE.Vector3(Math.cos(a) * 2.45, 0.14, Math.sin(a) * 2.45);
+    const b = brilho(COR.ciano, 0.22);
+    b.position.copy(p);
+    holoMesa.add(b);
+    emissores.push(b);
+    emissoresPos.push(new THREE.Vector3(p.x, p.y + mesa.position.y, p.z));
+  }
+
+  // poça de luz: o holograma ilumina a mesa e o piso
+  const pocaPlano = new THREE.Mesh(new THREE.CircleGeometry(7.2, 64), new THREE.MeshBasicMaterial({
+    map: texturaBrilho(), color: COR.ciano, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  pocaPlano.rotation.x = -Math.PI / 2;
+  pocaPlano.position.y = 0.03;
+  holoMesa.add(pocaPlano);
+  const luz = new THREE.PointLight(COR.ciano, 22, 16, 1.5);
+  luz.position.y = 1.6;
+  holoMesa.add(luz);
+
   // facho de luz da projeção
-  const facho = new THREE.Mesh(new THREE.CylinderGeometry(3.3, 0.75, 5.6, 72, 1, true), new THREE.ShaderMaterial({
-    uniforms: { uTempo: { value: 0 }, uCor: { value: COR.ciano } },
+  const facho = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 0.7, 5.6, 72, 1, true), new THREE.ShaderMaterial({
+    uniforms: { uTempo: { value: 0 }, uCor: { value: COR.ciano }, uForca: { value: 1 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `uniform float uTempo; uniform vec3 uCor; varying vec2 vUv;
+    fragmentShader: `uniform float uTempo, uForca; uniform vec3 uCor; varying vec2 vUv;
       void main(){
-        float sobe = pow(1.0 - vUv.y, 1.8);
+        float sobe = pow(max(1.0 - vUv.y, 0.0), 1.8);
         float faixas = 0.82 + 0.18 * sin(vUv.y * 90.0 - uTempo * 5.0);
         float raios = 0.75 + 0.25 * sin(vUv.x * 6.2832 * 24.0 + uTempo * 0.6);
-        float a = sobe * faixas * raios * 0.075;
+        float a = sobe * faixas * raios * 0.075 * uForca;
         gl_FragColor = vec4(uCor * a, a);
+        #include <colorspace_fragment>
       }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   }));
-  facho.position.y = 2.8;
-  mesa.add(facho);
+  facho.position.y = 2.9;
+  holoMesa.add(facho);
+
   // poeira subindo no facho
   const qtd = 900;
   const pos = new Float32Array(qtd * 3);
   for (let i = 0; i < qtd; i++) {
     const t = Math.random();
-    const r = Math.sqrt(Math.random()) * (0.75 + t * 2.5);
+    const r = Math.sqrt(Math.random()) * (0.75 + t * 2.3);
     const a = Math.random() * Math.PI * 2;
-    pos.set([Math.cos(a) * r, t * 5.6, Math.sin(a) * r], i * 3);
+    pos.set([Math.cos(a) * r, 0.1 + t * 5.6, Math.sin(a) * r], i * 3);
   }
   const geoPoeira = new THREE.BufferGeometry();
   geoPoeira.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   const poeira = new THREE.Points(geoPoeira, new THREE.PointsMaterial({
     color: COR.ciano, size: 0.03, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false,
   }));
-  mesa.add(poeira);
-  // chão polar
-  const chao = [];
-  for (const r of [4.5, 6, 8, 10.5]) {
-    for (let i = 0; i < 128; i++) {
-      const a1 = (i / 128) * Math.PI * 2;
-      const a2 = ((i + 1) / 128) * Math.PI * 2;
-      chao.push(Math.cos(a1) * r, -0.02, Math.sin(a1) * r, Math.cos(a2) * r, -0.02, Math.sin(a2) * r);
-    }
+  holoMesa.add(poeira);
+
+  return { mesa, holoMesa, anelMarcas, facho, poeira, emissor, emissores, emissoresPos, luz, pocaPlano };
+}
+
+// raios finos saindo das lentes da mesa até pontos da projeção
+function criarRaios() {
+  const n = 44;
+  const geo = new THREE.BufferGeometry();
+  const cores = new Float32Array(n * 6);
+  for (let i = 0; i < n; i++) cores.set([0.3, 0.85, 0.95, 0.015, 0.05, 0.06], i * 6);
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 6), 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(cores, 3));
+  const raios = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  raios.frustumCulled = false;
+  return raios;
+}
+
+const apoio = new THREE.Vector3();
+function atualizarRaios(agora) {
+  if (agora - L.raiosEm < 140) return;
+  L.raiosEm = agora;
+  const P = L.formas[L.indice].posicoes;
+  const pos = L.raios.geometry.attributes.position;
+  const n = pos.count / 2;
+  for (let i = 0; i < n; i++) {
+    const e = L.mesa.emissoresPos[i % L.mesa.emissoresPos.length];
+    const k = Math.floor(Math.random() * TOTAL) * 3;
+    L.projecao.localToWorld(apoio.set(P[k], P[k + 1], P[k + 2]));
+    pos.setXYZ(i * 2, e.x, e.y, e.z);
+    pos.setXYZ(i * 2 + 1, apoio.x, apoio.y, apoio.z);
   }
-  for (let i = 0; i < 24; i++) {
-    const a = (i / 24) * Math.PI * 2;
-    chao.push(Math.cos(a) * 3.5, -0.02, Math.sin(a) * 3.5, Math.cos(a) * 10.5, -0.02, Math.sin(a) * 10.5);
-  }
-  const geoChao = new THREE.BufferGeometry();
-  geoChao.setAttribute('position', new THREE.Float32BufferAttribute(chao, 3));
-  mesa.add(new THREE.LineSegments(geoChao, materialLinha(COR.azul, 0.16)));
-  return { mesa, anelMarcas, facho, poeira, emissor };
+  pos.needsUpdate = true;
 }
 
 function criarEstrelas() {
@@ -682,7 +852,7 @@ function criarEstrelas() {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  return new THREE.Points(geo, new THREE.PointsMaterial({ color: '#8fb8ff', size: 0.1, transparent: true, opacity: 0.3, depthWrite: false, fog: false }));
+  return new THREE.Points(geo, new THREE.PointsMaterial({ color: '#cfe0ff', size: 0.16, transparent: true, opacity: 0.85, depthWrite: false, fog: false }));
 }
 
 // mão desenhada em neon na frente da cena (presa à câmera)
@@ -752,15 +922,29 @@ const CSS = `
 .holo-camera{ position:absolute; right:22px; bottom:22px; z-index:2; width:220px; aspect-ratio:4/3; border:1px solid rgba(77,232,240,0.3); border-radius:4px; overflow:hidden; background:#000; }
 .holo-camera video{ width:100%; height:100%; object-fit:cover; transform:scaleX(-1); filter:saturate(0.4) contrast(1.15) brightness(0.8); }
 .holo-camera p{ position:absolute; left:8px; bottom:6px; margin:0; font-family:'Share Tech Mono',monospace; font-size:9.5px; letter-spacing:1.5px; color:#8ff3f7; text-shadow:0 0 6px #000; }
+.holo-rotulos{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
+.holo-rotulo{ position:absolute; left:0; top:0; padding:5px 9px 6px; background:rgba(2,12,18,0.62); border-left:2px solid #4de8f0; backdrop-filter:blur(4px); white-space:nowrap; transition:opacity .25s; will-change:transform; }
+.holo-rotulo b{ display:block; font-family:'Orbitron',sans-serif; font-size:9.5px; letter-spacing:2px; color:#e9f7f9; }
+.holo-rotulo span{ display:block; font-family:'Share Tech Mono',monospace; font-size:9.5px; letter-spacing:1px; color:#8ff3f7; margin-top:2px; }
+.holo-rotulo-linha{ position:absolute; left:0; top:0; height:1px; background:linear-gradient(90deg, #4de8f0, rgba(77,232,240,0.35)); transform-origin:0 50%; transition:opacity .25s; will-change:transform; }
+.holo-rotulo-linha::before{ content:""; position:absolute; left:-3px; top:-3px; width:5px; height:5px; border:1px solid #8ff3f7; transform:rotate(45deg); }
+.holo-flash{ position:absolute; inset:0; z-index:4; background:#000; opacity:0; pointer-events:none; transition:opacity .22s; }
+.holo-flash.ativo{ opacity:1; }
+.holo-btn.quieto{ opacity:0.55; }
 .holo-aviso{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3; font-family:'Share Tech Mono',monospace; font-size:13px; letter-spacing:3px; color:#4de8f0; text-align:center; pointer-events:none; }
 @media (max-width: 900px){
   .holo-lado{ width:auto; left:12px; right:12px; top:auto; bottom:14px; }
-  .holo-dir, .holo-camera, .holo-titulo, .holo-guia, .holo-relogio, .holo-longo{ display:none; }
+  .holo-dir, .holo-camera, .holo-titulo, .holo-guia, .holo-relogio, .holo-longo, .holo-rotulos{ display:none; }
   .holo-formas{ flex-direction:row; overflow-x:auto; }
   .holo-formas button{ min-width:120px; }
   .holo-formas small{ display:none; }
-  .holo-topo{ padding:12px 14px; }
+  .holo-topo{ padding:12px 14px; gap:8px; }
   .holo-marca small{ display:none; }
+  .holo-marca h1{ font-size:14px; letter-spacing:3px; }
+  .holo-topo .holo-btn{ padding:8px 10px; letter-spacing:1px; font-size:10px; }
+}
+@media (max-width: 440px){
+  .holo-marca{ display:none; }
 }
 @media (prefers-reduced-motion: reduce){ .holo-titulo strong{ animation:none; } }
 `;
@@ -779,8 +963,11 @@ function montarHud(raiz) {
       <div class="holo-marca"><h1>J.A.R.V.I.S.</h1><small>LABORATÓRIO HOLOGRÁFICO · PROJEÇÃO VOLUMÉTRICA</small></div>
       <div class="holo-espaco"></div>
       <div class="holo-relogio" data-h="relogio"></div>
+      <button class="holo-btn" type="button" data-h="som" aria-label="Ligar ou desligar o som">SOM</button>
+      <button class="holo-btn" type="button" data-h="visual"></button>
       <button class="holo-btn" type="button" data-h="voltar">◂ <span class="holo-longo">VOLTAR AO </span>CONSOLE</button>
     </div>
+    <div class="holo-rotulos" data-h="rotulos"></div>
     <aside class="holo-lado holo-esq">
       <section class="holo-caixa"><h2>PROJEÇÕES</h2><ul class="holo-formas" data-h="formas"></ul></section>
     </aside>
@@ -797,15 +984,30 @@ function montarHud(raiz) {
     <div class="holo-titulo"><span data-h="codigo"></span><strong data-h="titulo"></strong></div>
     <div class="holo-guia" data-h="guia">
       <span data-g="punho">✊ PUNHO · GIRAR</span><span data-g="pinca">🤏 PINÇA · ZOOM</span><span data-g="aberta">🖐 ABERTA · DESMONTAR</span>
-      <span data-g="dupla">👐 DUAS MÃOS · ESCALA</span><span data-g="deslize">↔ DESLIZAR · TROCAR</span>
+      <span data-g="aponta">☝ DEDO · TOCAR</span><span data-g="dupla">👐 DUAS MÃOS · ESCALA</span><span data-g="deslize">↔ DESLIZAR · TROCAR</span>
     </div>
     <div class="holo-camera"><video playsinline muted></video><p data-h="camera">CÂMERA · INICIANDO</p></div>
+    <div class="holo-flash" data-h="flash"></div>
     <div class="holo-aviso" data-h="aviso">INICIALIZANDO PROJETOR…</div>`;
   const h = {};
   for (const el of raiz.querySelectorAll('[data-h]')) h[el.dataset.h] = el;
   L.hud = h;
   L.video = raiz.querySelector('.holo-camera video');
-  h.voltar.addEventListener('click', () => L.aoVoltar?.());
+  h.voltar.addEventListener('click', () => {
+    L.som.clique();
+    L.aoVoltar?.();
+  });
+  h.visual.addEventListener('click', () => {
+    L.som.clique();
+    definirVisual(L.modo === 'real' ? 'holo' : 'real');
+  });
+  h.som.addEventListener('click', () => {
+    const ligado = L.som.alternar();
+    h.som.classList.toggle('quieto', !ligado);
+    if (ligado) L.som.ligarZumbido();
+    else L.som.desligarZumbido();
+  });
+  h.som.classList.toggle('quieto', !L.som.ligado);
   h.desmontar.addEventListener('click', () => desmontar(!L.desmontadoPorComando));
   h.centralizar.addEventListener('click', centralizar);
   return raiz.querySelector('canvas');
@@ -818,7 +1020,10 @@ function desenharListaFormas() {
     b.type = 'button';
     b.className = i === L.indice ? 'ativo' : '';
     b.innerHTML = `<span class="cod">${f.codigo}</span><b>${f.titulo}</b><small>${f.descricao.split(':')[0].split(',')[0]}</small>`;
-    b.addEventListener('click', () => mostrar(i));
+    b.addEventListener('click', () => {
+      L.som.clique();
+      mostrar(i);
+    });
     li.append(b);
     return li;
   }));
@@ -830,7 +1035,8 @@ function atualizarHud() {
   const h = L.hud;
   h.relogio.textContent = new Date().toLocaleTimeString('pt-BR', { hour12: false });
   const grau = (r) => `${Math.round(THREE.MathUtils.radToDeg(r) % 360)}°`;
-  h.dados.innerHTML = f.dados.map(([k, v]) => `<dt>${k.toUpperCase()}</dt><dd>${v}</dd>`).join('');
+  const dados = typeof f.dados === 'function' ? f.dados() : f.dados;
+  h.dados.innerHTML = dados.map(([k, v]) => `<dt>${k.toUpperCase()}</dt><dd>${v}</dd>`).join('');
   const maos = L.maos.length;
   h.controle.innerHTML = [
     ['MÃOS', L.detector ? (maos ? `${maos} DETECTADA${maos > 1 ? 'S' : ''}` : 'AGUARDANDO') : 'CARREGANDO'],
@@ -838,12 +1044,69 @@ function atualizarHud() {
     ['ROTAÇÃO', `${grau(L.rot.x)} / ${grau(L.rot.y)}`],
     ['ESTADO', L.explosao > 0.3 ? 'DESMONTADO' : 'MONTADO'],
     ['QUADROS', `${L.fps} FPS`],
+    ['VISUAL', L.modo === 'real' ? 'FOTO REAL' : 'HOLOGRAMA'],
     ['QUALIDADE', L.economia ? 'ECONÔMICA' : 'MÁXIMA'],
   ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   h.gesto.textContent = NOMES_GESTO[L.duas ? 'dupla' : L.gesto] || '—';
   for (const s of h.guia.children) s.classList.toggle('ativo', s.dataset.g === (L.duas ? 'dupla' : L.gesto) || (s.dataset.g === 'deslize' && performance.now() - L.trocaEm < 700));
   h.desmontar.textContent = L.desmontadoPorComando ? 'MONTAR' : 'DESMONTAR';
   h.desmontar.classList.toggle('ativo', L.desmontadoPorComando);
+}
+
+function montarRotulos(f) {
+  const criar = (classe) => {
+    const d = document.createElement('div');
+    d.className = classe;
+    return d;
+  };
+  L.rotulosDom = (f.rotulos || []).map((r) => {
+    const linha = criar('holo-rotulo-linha');
+    const caixa = criar('holo-rotulo');
+    const titulo = document.createElement('b');
+    const valor = document.createElement('span');
+    titulo.textContent = r.titulo;
+    caixa.append(titulo, valor);
+    return { r, linha, caixa, valor };
+  });
+  L.hud.rotulos.replaceChildren(...L.rotulosDom.flatMap((i) => [i.linha, i.caixa]));
+}
+
+const pontoRotulo = new THREE.Vector3();
+const centroProj = new THREE.Vector3();
+function atualizarRotulos() {
+  if (!L.rotulosDom.length) return;
+  const w = L.raiz.clientWidth;
+  const h = L.raiz.clientHeight;
+  const geral = L.intro > 0.85 && L.morph >= 1 && L.explosao < 0.3;
+  L.projecao.getWorldPosition(centroProj);
+  for (const item of L.rotulosDom) {
+    const { r, linha, caixa, valor } = item;
+    pontoRotulo.copy(typeof r.ponto === 'function' ? r.ponto() : r.ponto);
+    L.projecao.localToWorld(pontoRotulo);
+    // em objetos redondos, o rótulo some quando o ponto passa para trás
+    let mostra = geral && (!r.visivel || r.visivel());
+    if (r.frente) {
+      const fora = apoio.copy(pontoRotulo).sub(centroProj);
+      const ate = pontoRotulo.clone().sub(L.camera.position).negate();
+      if (fora.dot(ate) < 0) mostra = false;
+    }
+    pontoRotulo.project(L.camera);
+    const x = (pontoRotulo.x + 1) / 2 * w;
+    const y = (1 - pontoRotulo.y) / 2 * h;
+    if (x < 280 || x > w - 280 || y < 60 || y > h - 60) mostra = false;
+    caixa.style.opacity = linha.style.opacity = mostra ? 1 : 0;
+    if (!mostra) continue;
+    const lado = x >= w / 2 ? 1 : -1;
+    const bx = x + lado * 58;
+    const by = y - 42;
+    const texto = typeof r.valor === 'function' ? r.valor() : r.valor;
+    if (valor.textContent !== texto) valor.textContent = texto;
+    caixa.style.transform = `translate(${bx}px, ${by}px) translate(${lado > 0 ? 0 : -100}%, -50%)`;
+    const dx = bx - x;
+    const dy = by - y;
+    linha.style.width = `${Math.hypot(dx, dy)}px`;
+    linha.style.transform = `translate(${x}px, ${y}px) rotate(${Math.atan2(dy, dx)}rad)`;
+  }
 }
 
 function mostrarTitulo(f) {
@@ -897,6 +1160,7 @@ function lerMao(pts) {
   const pinca = d(4, 8) / palma < 0.32 && d(0, 8) > palma * 1.15;
   let gesto = 'nenhum';
   if (pinca) gesto = 'pinca';
+  else if (dedos === 1 && estendido(8, 6)) gesto = 'aponta';
   else if (dedos <= 1) gesto = 'punho';
   else if (dedos >= 4) gesto = 'aberta';
   const pontaPinca = { x: (pts[4].x + pts[8].x) / 2, y: (pts[4].y + pts[8].y) / 2 };
@@ -934,6 +1198,7 @@ function processarMaos(agora) {
   L.maos = novas;
   if (novas.length) L.ultimaMaoEm = agora;
   desenharMaos();
+  L.dedoAlvo = 0;
 
   // duas mãos abertas ou em pinça: afastar amplia, aproximar reduz
   if (novas.length === 2 && novas.every((m) => m.gesto === 'aberta' || m.gesto === 'pinca')) {
@@ -950,12 +1215,24 @@ function processarMaos(agora) {
   const antes = anteriores[0];
   if (!m) {
     L.gesto = 'nenhum';
+    L.gestoAntes = 'nenhum';
     L.historico = [];
     L.explosaoAlvo = L.desmontadoPorComando ? 2.2 : 0;
     L.atracaoAlvo = 0;
     return;
   }
   L.gesto = m.gesto;
+  if (m.gesto !== L.gestoAntes) {
+    if (m.gesto === 'punho' || m.gesto === 'pinca') L.som.agarrar();
+    if (m.gesto === 'aberta') L.som.desmontar();
+    if (L.gestoAntes === 'aberta') L.som.montar();
+    L.gestoAntes = m.gesto;
+  }
+  if (m.gesto === 'aponta') {
+    const ponta = pontoNoMundo(m.pts[8]);
+    if (ponta) L.nuvem.material.uniforms.uDedo.value.copy(L.nuvem.worldToLocal(ponta));
+    L.dedoAlvo = 1;
+  }
   if (m.gesto === 'punho' && antes) {
     const dx = (1 - m.centro.x) - (1 - antes.centro.x);
     const dy = m.centro.y - antes.centro.y;
@@ -1013,6 +1290,10 @@ function desenharMaos() {
 
 // ---------------- mouse e teclado ----------------
 function ligarControlesManuais(canvas) {
+  L.raiz.addEventListener('pointermove', (e) => {
+    L.ponteiro.x = (e.clientX / innerWidth - 0.5) * 2;
+    L.ponteiro.y = (e.clientY / innerHeight - 0.5) * 2;
+  });
   canvas.addEventListener('pointerdown', (e) => {
     L.arraste = { x: e.clientX, y: e.clientY };
     canvas.setPointerCapture(e.pointerId);
@@ -1046,32 +1327,57 @@ function ligarControlesManuais(canvas) {
 // ---------------- cena ----------------
 async function montarCena(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
-  renderer.setClearColor('#01060a');
+  const fraca = placaFraca(renderer);
+  TOTAL = fraca ? TOTAL_LEVE : TOTAL_NORMAL;
+  Q = TOTAL / 26000;
+  L.economia = fraca;
+  L.placaFraca = fraca;
+  renderer.setPixelRatio(fraca ? 1 : Math.min(devicePixelRatio, 1.5));
+  renderer.setClearColor('#01040a');
   const cena = new THREE.Scene();
-  cena.fog = new THREE.FogExp2('#01060a', 0.035);
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+  L.neblina = new THREE.FogExp2('#02060a', 0.016);
+  cena.fog = L.neblina;
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 300);
   camera.position.set(0, 1.2, 11);
   camera.lookAt(0, 0.1, 0);
+  camera.layers.enable(1);   // a mão em neon fica na camada 1, que o reflexo do piso não enxerga
   cena.add(camera);
-  const composer = new EffectComposer(renderer);
+  const alvo = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: fraca ? 0 : 4 });
+  const composer = new EffectComposer(renderer, alvo);
   composer.addPass(new RenderPass(cena, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.75, 0.45, 0.2);
   composer.addPass(bloom);
+  L.lente = criarLente();
+  composer.addPass(L.lente);
   composer.addPass(new OutputPass());
   Object.assign(L, { renderer, cena, camera, composer, bloom });
+  ambienteEstudio(renderer, cena, 0.55);
 
-  cena.add(criarEstrelas());
-  const mesa = criarMesa();
-  L.mesa = mesa;
-  cena.add(mesa.mesa);
+  L.sala = criarSala({ resolucao: fraca ? 256 : 1024 });
+  L.sala.usarReflexo(!fraca);
+  cena.add(L.sala.grupo);
+  L.estrelas = criarEstrelas();
+  L.estrelas.visible = false;
+  cena.add(L.estrelas);
+  L.mesa = criarMesa();
+  cena.add(L.mesa.mesa);
+  L.raios = criarRaios();
+  cena.add(L.raios);
+  L.luzSol = new THREE.DirectionalLight('#fff4e6', 1.6);
+  L.luzSol.position.set(-6, 9, 7);
+  L.luzCeu = new THREE.HemisphereLight('#a9c8ff', '#0a0f14', 0.22);
+  cena.add(L.luzSol, L.luzCeu);
+
   L.projecao = new THREE.Group();
   L.projecao.position.y = 0.35;
   cena.add(L.projecao);
   L.nuvem = criarNuvem();
   L.projecao.add(L.nuvem);
   L.maosVisuais = [criarMaoVisual(), criarMaoVisual()];
-  for (const v of L.maosVisuais) camera.add(v.grupo);
+  for (const v of L.maosVisuais) {
+    v.grupo.traverse((o) => o.layers.set(1));
+    camera.add(v.grupo);
+  }
 
   L.formas = [formaTerra(), formaSaturno(), formaReator(), formaAtomo(), formaDna(), formaCidade()];
   const geo = L.nuvem.geometry;
@@ -1090,6 +1396,7 @@ async function montarCena(canvas) {
   L.morph = 0;
   L.linhas = f.linhas;
   L.projecao.add(L.linhas);
+  if (f.comuns) L.projecao.add(f.comuns);
   ajustarTamanho();
   addEventListener('resize', ajustarTamanho);
 }
@@ -1099,27 +1406,90 @@ function ajustarTamanho() {
   const w = L.raiz.clientWidth || innerWidth;
   const h = L.raiz.clientHeight || innerHeight;
   L.renderer.setSize(w, h, false);
+  L.composer.setPixelRatio(L.renderer.getPixelRatio());
   L.composer.setSize(w, h);
   L.camera.aspect = w / h;
   // em tela em pé a câmera se afasta para caber a projeção
-  L.camera.position.z = w / h < 1 ? 15 : 11;
+  L.camZ = w / h < 1 ? 15 : 11;
   L.camera.updateProjectionMatrix();
   L.nuvem.material.uniforms.uPixel.value = L.renderer.getPixelRatio() * (h / 900);
 }
 
-function quadro() {
+function definirEconomia(sim) {
+  L.economia = sim;
+  L.lentoDesde = 0;
+  if (sim) {
+    L.economiaDesde = performance.now();
+    L.tentativasEconomia += 1;
+  }
+  L.renderer.setPixelRatio(sim ? 1 : Math.min(devicePixelRatio, 1.5));
+  L.sala.usarReflexo(!sim);
+  L.raios.visible = !sim && L.modo === 'holo';
+  ajustarTamanho();
+}
+
+function obterReal(f) {
+  if (f.real) return f.real;
+  const r = criarReal(f.chave, f.opcoesReal || {});
+  r.grupo.visible = false;
+  r.carregado = false;
+  L.projecao.add(r.grupo);
+  f.real = r;
+  L.hud.aviso.textContent = 'MATERIALIZANDO MODELO…';
+  r.pronto.then(() => {
+    r.carregado = true;
+    L.hud.aviso.textContent = '';
+  }).catch((erro) => {
+    console.warn('Holo:', erro);
+    L.hud.aviso.textContent = '';
+    r.falhou = true;
+    L.hud.camera.textContent = 'TEXTURAS INDISPONÍVEIS · MOSTRANDO HOLOGRAMA';
+  });
+  return r;
+}
+
+// liga e desliga o que cada visual precisa
+function aplicarModo() {
+  const real = L.modo === 'real';
+  const f = L.formas[L.indice];
+  const r = real ? obterReal(f) : null;
+  const espaco = !!r && r.ambiente === 'espaco';
+  L.sala.grupo.visible = !espaco;
+  L.mesa.mesa.visible = !espaco;
+  L.estrelas.visible = espaco;
+  L.mesa.holoMesa.visible = !real;
+  L.raios.visible = !real && !L.economia;
+  L.linhas.visible = !real;
+  L.luzSol.visible = real;
+  L.luzCeu.visible = real && !espaco;
+  L.luzSol.position.set(-6, 9, 7);
+  L.cena.fog = espaco ? null : L.neblina;
+  L.cena.environmentIntensity = real ? 0.38 : 0.45;
+  L.renderer.toneMapping = real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  L.renderer.toneMappingExposure = 0.95;
+  L.bloom.strength = real ? 0.22 : 0.42;
+  L.bloom.threshold = real ? 1 : 0.42;
+  for (const outra of L.formas) if (outra !== f && outra.real) outra.real.grupo.visible = false;
+  if (!real && f.real) f.real.grupo.visible = false;
+  const rotuloBotao = real ? '◐ <span class="holo-longo">VISUAL </span>HOLOGRAMA' : '◉ <span class="holo-longo">VISUAL </span>FOTO REAL';
+  L.hud.visual.innerHTML = rotuloBotao;
+}
+
+function quadro(agora) {
   if (!L.aberto) return;
   L.quadro = requestAnimationFrame(quadro);
-  const delta = L.relogio.getDelta();
+  if (!agora) agora = performance.now();
+  const delta = Math.min(1, Math.max(0.001, (agora - (L.ultimoQuadro || agora - 16)) / 1000));
+  L.ultimoQuadro = agora;
+  L.tempo += delta;
   const dt = Math.min(delta, 0.05);
-  const t = L.relogio.elapsedTime;
-  const agora = performance.now();
-  L.fps = Math.round(L.fps * 0.9 + (1 / Math.max(delta, 1e-3)) * 0.1);
-  processarMaos(agora);
+  const t = L.tempo;
+  L.fps = Math.round(L.fps * 0.9 + (1 / delta) * 0.1);
+  processarMaos(performance.now());
 
   // giro com inércia; parado, gira sozinho bem devagar
-  const ocioso = !L.arraste && agora - L.ultimaMaoEm > 1500;
-  L.rot.y += L.rot.vy + (ocioso ? dt * 0.12 : 0);
+  const ocioso = !L.arraste && performance.now() - L.ultimaMaoEm > 1500;
+  L.rot.y += L.rot.vy + (ocioso ? dt * 0.1 : 0);
   L.rot.x = THREE.MathUtils.clamp(L.rot.x + L.rot.vx, -1.2, 1.2);
   L.rot.vy *= 0.9;
   L.rot.vx *= 0.9;
@@ -1128,47 +1498,99 @@ function quadro() {
   L.projecao.scale.setScalar(L.escala);
   L.explosao = THREE.MathUtils.lerp(L.explosao, L.explosaoAlvo, L.explosaoAlvo > L.explosao ? 0.05 : 0.12);
   L.atracao = THREE.MathUtils.lerp(L.atracao, L.atracaoAlvo, 0.08);
+  L.dedoForca = THREE.MathUtils.lerp(L.dedoForca, L.dedoAlvo, 0.15);
   L.morph = Math.min(1, L.morph + Math.min(delta, 0.25) / 2.2);   // a transformação dura ~2 s mesmo com poucos quadros
 
+  // câmera: chega de longe ao abrir e acompanha o movimento do mouse ou da mão, como olhar pela janela
+  L.intro = Math.min(1, L.intro + delta / 2.8);
+  const e = 1 - Math.pow(1 - L.intro, 3);
+  const mao = L.maos[0];
+  const alvoX = mao ? (0.5 - mao.centro.x) * 2 : L.ponteiro.x;
+  const alvoY = mao ? (mao.centro.y - 0.5) * 2 : L.ponteiro.y;
+  L.paralaxe.x += (alvoX - L.paralaxe.x) * 0.035;
+  L.paralaxe.y += (alvoY - L.paralaxe.y) * 0.035;
+  L.camera.position.set(
+    L.paralaxe.x * 1.25 + Math.sin(t * 0.23) * 0.06,
+    THREE.MathUtils.lerp(7, 1.2, e) - L.paralaxe.y * 0.5 + Math.sin(t * 0.31) * 0.04,
+    THREE.MathUtils.lerp(L.camZ + 12, L.camZ, e),
+  );
+  L.camera.lookAt(0, 0.15, 0);
+
+  const f = L.formas[L.indice];
   const u = L.nuvem.material.uniforms;
   u.uTempo.value = t;
   u.uMorph.value = L.morph;
   u.uExplosao.value = L.explosao;
   u.uAtracao.value = L.atracao;
+  u.uDedoForca.value = L.dedoForca;
+  L.solAtivo = THREE.MathUtils.lerp(L.solAtivo, f.solAtivo ? 1 : 0, 0.06);
+  u.uSolAtivo.value = L.solAtivo;
+  if (f.sol) u.uSol.value.copy(f.sol());
+
+  // falha de projeção rápida de tempos em tempos (só no holograma)
+  if (agora > L.proximoGlitch) {
+    L.glitchAte = agora + 80 + Math.random() * 110;
+    L.proximoGlitch = agora + 3500 + Math.random() * 7000;
+  }
+  const falha = agora < L.glitchAte;
+  u.uGlitch.value = falha ? 1 : 0;
+  L.mesa.facho.material.uniforms.uForca.value = falha ? 0.55 : 1;
+
+  f.animar(t);
+  // visual foto real: o objeto de verdade aparece quando as partículas terminam de chegar;
+  // ao desmontar, ele volta a virar partículas
+  const real = L.modo === 'real' ? obterReal(f) : null;
+  const mostrarReal = !!real && real.carregado && !real.falhou && L.morph >= 1 && L.explosao < 0.12;
+  if (real) {
+    real.grupo.visible = mostrarReal;
+    if (mostrarReal) real.animar(t, { camera: L.camera, projecao: L.projecao, luzSol: L.luzSol });
+  }
+  L.opNuvem = THREE.MathUtils.lerp(L.opNuvem, mostrarReal ? 0 : 1, mostrarReal ? 0.1 : 0.25);
+  u.uOpacidade.value = L.opNuvem;
+  L.nuvem.visible = L.opNuvem > 0.01;
+
   // as linhas da forma somem quando ela desmonta e acendem quando a transformação termina
   // (animações de piscar usam userData.pulso, para não brigar com esse apagar)
-  L.formas[L.indice].animar(t);
   const visLinhas = Math.max(0, Math.min(1, (L.morph - 0.55) / 0.45)) * (1 - Math.min(1, L.explosao / 1.2));
-  L.linhas.traverse((o) => {
+  const aplicar = (o) => {
     if (o.material) {
       o.material.userData.base ??= o.material.opacity;
       o.material.opacity = o.material.userData.base * visLinhas * (o.material.userData.pulso ?? 1);
     }
-  });
+  };
+  L.linhas.traverse(aplicar);
+  if (f.comuns) f.comuns.traverse(aplicar);
 
-  L.mesa.anelMarcas.rotation.y = t * 0.15;
-  L.mesa.facho.material.uniforms.uTempo.value = t;
-  L.mesa.emissor.scale.setScalar(1.05 + Math.sin(t * 2.4) * 0.1);
-  const poeira = L.mesa.poeira.geometry.attributes.position;
-  for (let i = 0; i < poeira.count; i++) {
-    let y = poeira.getY(i) + dt * (0.25 + (i % 7) * 0.05);
-    if (y > 5.6) y = 0;
-    poeira.setY(i, y);
-  }
-  poeira.needsUpdate = true;
-
-  // sem aceleração de vídeo (ou placa fraca) o bloom pesa demais: depois de 3 s lentos, desliga e baixa a resolução
-  if (!L.economia) {
-    if (L.fps >= 24) L.lentoDesde = 0;
-    else if (!L.lentoDesde) L.lentoDesde = agora;
-    else if (agora - L.lentoDesde > 3000) {
-      L.economia = true;
-      L.renderer.setPixelRatio(1);
-      ajustarTamanho();
+  L.sala.animar(delta);
+  if (L.modo === 'holo') {
+    L.mesa.anelMarcas.rotation.y = t * 0.15;
+    L.mesa.facho.material.uniforms.uTempo.value = t;
+    L.mesa.emissor.scale.setScalar(1.05 + Math.sin(t * 2.4) * 0.1);
+    L.mesa.emissores.forEach((b, i) => { b.material.opacity = 0.55 + 0.45 * Math.sin(t * 2 + i * 1.7); });
+    L.mesa.luz.intensity = (falha ? 12 : 22) + Math.sin(t * 3.1) * 2;
+    const poeira = L.mesa.poeira.geometry.attributes.position;
+    for (let i = 0; i < poeira.count; i++) {
+      let y = poeira.getY(i) + dt * (0.25 + (i % 7) * 0.05);
+      if (y > 5.7) y = 0.1;
+      poeira.setY(i, y);
     }
+    poeira.needsUpdate = true;
+    if (L.raios.visible) atualizarRaios(agora);
+  }
+  L.lente.uniforms.uTempo.value = t % 10;
+
+  // placa fraca: depois de 4 s lentos, desliga o bloom e o reflexo e baixa a resolução. Como a lentidão pode
+  // ser passageira, depois de um tempo tenta voltar; se pesar de novo, fica no modo econômico de vez.
+  if (!L.economia && L.intro >= 1) {
+    if (L.fps >= 20 || delta > 0.4) L.lentoDesde = 0;
+    else if (!L.lentoDesde) L.lentoDesde = agora;
+    else if (agora - L.lentoDesde > 4000) definirEconomia(true);
+  } else if (L.economia && !L.placaFraca && L.tentativasEconomia < 2 && agora - L.economiaDesde > 25000 && L.fps >= 45) {
+    definirEconomia(false);
   }
   if (L.economia) L.renderer.render(L.cena, L.camera);
   else L.composer.render();
+  atualizarRotulos();
   if (Math.floor(t * 5) !== L.ultimoHud) {
     L.ultimoHud = Math.floor(t * 5);
     atualizarHud();
@@ -1176,23 +1598,32 @@ function quadro() {
 }
 
 // ---------------- API usada pelo console ----------------
-export async function abrir({ raiz, stream = null, aoVoltar = null } = {}) {
+export async function abrir({ raiz, stream = null, aoVoltar = null, visual = 'holo', clima = '', aoTrocarVisual = null } = {}) {
   L.aoVoltar = aoVoltar;
+  L.aoTrocarVisual = aoTrocarVisual;
+  L.clima = clima;
   if (L.aberto) return estadoAtual();
   raiz.hidden = false;
   L.raiz = raiz;
+  L.modo = visual === 'real' ? 'real' : 'holo';
   if (!L.pronto) {
     const canvas = montarHud(raiz);
     ligarControlesManuais(canvas);
     await montarCena(canvas);
     desenharListaFormas();
     mostrarTitulo(L.formas[0]);
+    montarRotulos(L.formas[0]);
     L.pronto = true;
   }
   L.hud.aviso.textContent = '';
+  aplicarModo();
   L.aberto = true;
-  L.relogio.getDelta();
+  L.intro = 0;
+  L.ultimoQuadro = 0;
   ajustarTamanho();
+  L.som.ligarSistema();
+  L.som.ligarZumbido();
+  L.formas[L.indice].aoEntrar?.();
   quadro();
   if (await iniciarCamera(stream)) {
     iniciarMaos().catch((erro) => {
@@ -1207,6 +1638,8 @@ export function fechar() {
   if (!L.aberto) return;
   L.aberto = false;
   cancelAnimationFrame(L.quadro);
+  L.som.desligarZumbido();
+  L.formas[L.indice]?.aoSair?.();
   if (L.streamProprio && L.stream) L.stream.getTracks().forEach((tr) => tr.stop());
   L.stream = null;
   if (L.video) L.video.srcObject = null;
@@ -1220,6 +1653,7 @@ export function mostrar(alvo) {
   if (i < 0) return `Não tenho a projeção "${alvo}". Tenho: ${L.formas.map((f) => f.titulo).join(', ')}.`;
   i = (i + L.formas.length) % L.formas.length;
   if (i === L.indice && L.morph >= 1) return `Já estou exibindo ${L.formas[i].titulo}.`;
+  L.som.transformar();
   const geo = L.nuvem.geometry;
   // de onde as partículas estão agora até a nova forma
   const m = L.morph;
@@ -1231,21 +1665,31 @@ export function mostrar(alvo) {
     pos[k] += (dest[k] - pos[k]) * m;
     cor[k] += (corDest[k] - cor[k]) * m;
   }
+  const antiga = L.formas[L.indice];
   const f = L.formas[i];
   dest.set(f.posicoes);
   corDest.set(f.cores);
   for (const nome of ['position', 'cor', 'destino', 'corDestino']) geo.attributes[nome].needsUpdate = true;
   L.morph = 0;
+  antiga.aoSair?.();
+  if (antiga.comuns) L.projecao.remove(antiga.comuns);
+  if (antiga.real) antiga.real.grupo.visible = false;
   L.projecao.remove(L.linhas);
   L.linhas = f.linhas;
   L.projecao.add(L.linhas);
+  if (f.comuns) L.projecao.add(f.comuns);
   L.indice = i;
+  L.opNuvem = 1;
+  aplicarModo();
+  f.aoEntrar?.();
   desenharListaFormas();
   mostrarTitulo(f);
+  montarRotulos(f);
   return `Exibindo ${f.titulo}: ${f.descricao}`;
 }
 
 export function desmontar(sim = true) {
+  if (L.desmontadoPorComando !== !!sim) (sim ? L.som.desmontar() : L.som.montar());
   L.desmontadoPorComando = !!sim;
   L.explosaoAlvo = sim ? 2.2 : 0;
   L.atracaoAlvo = 0;
@@ -1264,10 +1708,31 @@ export function centralizar() {
   return 'Projeção centralizada.';
 }
 
+// troca entre o holograma de cinema ('holo') e a foto real ('real'), com um corte rápido para o preto
+export function definirVisual(modo, { avisarConsole = true } = {}) {
+  const novo = modo === 'real' ? 'real' : 'holo';
+  if (!L.pronto) {
+    L.modo = novo;
+    return novo;
+  }
+  if (novo === L.modo) return novo;
+  L.som.transformar();
+  L.hud.flash.classList.add('ativo');
+  setTimeout(() => {
+    L.modo = novo;
+    L.opNuvem = 1;
+    aplicarModo();
+    L.hud.flash.classList.remove('ativo');
+  }, 240);
+  if (avisarConsole) L.aoTrocarVisual?.(novo);
+  return novo;
+}
+
 export function estadoAtual() {
   const f = L.formas[L.indice];
-  return { aberto: L.aberto, forma: f?.titulo, formas: L.formas.map((x) => x.titulo), maos: L.maos.length, rastreamento: !!L.detector };
+  return { aberto: L.aberto, forma: f?.titulo, formas: L.formas.map((x) => x.titulo), maos: L.maos.length, rastreamento: !!L.detector, visual: L.modo };
 }
+
 
 function normalizar(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').trim();
