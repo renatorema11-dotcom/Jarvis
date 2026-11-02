@@ -2294,6 +2294,10 @@ async function usarHolograma({ acao = 'abrir', forma = '' } = {}) {
     fecharHolo();
     return 'Voltei para o console.';
   }
+  if (acao === 'foto_real' || acao === 'holograma') {
+    trocarVisual(acao === 'foto_real' ? 'real' : 'holo');
+    return acao === 'foto_real' ? 'Visual foto real ligado.' : 'Visual holograma ligado.';
+  }
   try {
     await abrirHolo();
   } catch (erro) {
@@ -2304,10 +2308,6 @@ async function usarHolograma({ acao = 'abrir', forma = '' } = {}) {
   if (acao === 'montar') return holo.desmontar(false);
   if (acao === 'girar') return holo.girar(90);
   if (acao === 'centralizar') return holo.centralizar();
-  if (acao === 'foto_real' || acao === 'holograma') {
-    trocarVisual(acao === 'foto_real' ? 'real' : 'holo');
-    return acao === 'foto_real' ? 'Visual foto real ligado.' : 'Visual holograma ligado.';
-  }
   const e = holo.estadoAtual();
   return `Laboratório holográfico aberto, exibindo ${e.forma}. Projeções disponíveis: ${e.formas.join(', ')}. `
     + 'O Renato controla com as mãos: punho gira, pinça dá zoom, mão aberta desmonta, duas mãos ampliam e deslizar troca de projeção.';
