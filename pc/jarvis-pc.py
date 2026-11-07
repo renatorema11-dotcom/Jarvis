@@ -7,7 +7,9 @@ pesquisar, volume, mídia e bloquear a tela. Só aceita pedidos com a chave do
 cérebro e vindos da página do Jarvis, e só executa ações de uma lista fixa —
 nunca um comando livre. A ferramenta navegador (/navegador) faz tarefas numa
 janela própria do Chrome — veja navegador.py. /dispositivos procura fones,
-celulares, TVs e outros aparelhos por perto — veja dispositivos.py.
+celulares, TVs e outros aparelhos por perto — veja dispositivos.py. /apps lista os
+programas do menu Iniciar com os ícones, para a lista de apps do laboratório
+holográfico — veja apps.py.
 
 Opcional: com numpy e sounddevice instalados (o venv do OpenJarvis tem), fica
 ouvindo DUAS palmas e abre a página do Jarvis já iniciando a conversa.
@@ -28,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote
 
+import apps
 import dispositivos
 from navegador import Navegador
 
@@ -79,6 +82,9 @@ TECLAS = {
     ("midia", "tocar_pausar"): 0xB3, ("midia", "proxima"): 0xB0, ("midia", "anterior"): 0xB1,
 }
 SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# o app do Spotify da Microsoft Store (atalho em WindowsApps) e o instalador do site
+SPOTIFY = [Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WindowsApps" / "Spotify.exe",
+           Path(os.environ.get("APPDATA", "")) / "Spotify" / "Spotify.exe"]
 
 
 def ler_chave() -> str:
@@ -109,11 +115,30 @@ def abrir_app(alvo: str) -> dict:
     como = APPS.get(nome)
     if not como:
         return {"ok": False, "mensagem": f"Não sei abrir '{alvo}'. Programas que eu abro: {', '.join(sorted(APPS))}."}
+    # abrir um app da Microsoft Store pode segurar a chamada por vários segundos: abre em paralelo
     if isinstance(como, str):
-        os.startfile(como)
+        threading.Thread(target=os.startfile, args=(como,), daemon=True).start()
     else:
         subprocess.Popen(como, creationflags=SEM_JANELA)
     return {"ok": True, "mensagem": f"Abrindo {alvo}."}
+
+
+def spotify_aberto() -> bool:
+    saida = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Spotify.exe", "/NH"], capture_output=True, text=True,
+                           creationflags=SEM_JANELA).stdout
+    return "spotify.exe" in saida.lower()
+
+
+def preparar_spotify() -> dict:
+    """Abre o Spotify minimizado, para ele já estar conectado quando a música de boas-vindas for tocar."""
+    if spotify_aberto():
+        return {"ok": True, "mensagem": "O Spotify já está aberto.", "abriu": False}
+    exe = next((p for p in SPOTIFY if p.exists()), None)
+    if exe:
+        subprocess.Popen([str(exe), "--minimized"], creationflags=SEM_JANELA)
+    else:
+        threading.Thread(target=os.startfile, args=("spotify:",), daemon=True).start()
+    return {"ok": True, "mensagem": "Abrindo o Spotify minimizado.", "abriu": True}
 
 
 def abrir_site(alvo: str) -> dict:
@@ -133,6 +158,10 @@ def executar(acao: str, alvo: str, valor: str) -> dict:
         return abrir_app(alvo)
     if acao == "abrir_site":
         return abrir_site(alvo)
+    if acao == "abrir_app_id":
+        return apps.abrir(str(alvo))
+    if acao == "preparar_spotify":
+        return preparar_spotify()
     if acao == "pesquisar":
         webbrowser.open("https://www.google.com/search?q=" + quote(str(alvo)))
         return {"ok": True, "mensagem": f"Pesquisando '{alvo}' no Google."}
@@ -145,7 +174,7 @@ def executar(acao: str, alvo: str, valor: str) -> dict:
     if acao == "bloquear_tela":
         ctypes.windll.user32.LockWorkStation()
         return {"ok": True, "mensagem": "Tela bloqueada."}
-    return {"ok": False, "mensagem": f"Ação desconhecida: {acao}. Use abrir_app, abrir_site, pesquisar, youtube, volume, midia ou bloquear_tela."}
+    return {"ok": False, "mensagem": f"Ação desconhecida: {acao}. Use abrir_app, abrir_app_id, abrir_site, pesquisar, youtube, volume, midia, preparar_spotify ou bloquear_tela."}
 
 
 class Servidor(BaseHTTPRequestHandler):
@@ -194,18 +223,20 @@ class Servidor(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path not in ("/status", "/navegador", "/dispositivos"):
+        if self.path not in ("/status", "/navegador", "/dispositivos", "/apps"):
             return self.responder(404, {"ok": False})
         if not self.autorizado():
             return
         if self.path == "/navegador":
             return self.responder(200, NAVEGADOR.comando("status"))
+        if self.path == "/apps":
+            return self.responder(200, {"ok": True, "apps": apps.listar()})
         if self.path == "/dispositivos":
             try:
                 return self.responder(200, dispositivos.buscar())
             except Exception as erro:
                 return self.responder(200, {"ok": False, "mensagem": f"A busca de dispositivos falhou: {erro}"})
-        self.responder(200, {"ok": True, "versao": 3, "apps": sorted(APPS), "palmas": PALMAS_ATIVAS})
+        self.responder(200, {"ok": True, "versao": 4, "apps": sorted(APPS), "palmas": PALMAS_ATIVAS})
 
     def do_POST(self):
         if self.path not in ("/acao", "/navegador", "/dispositivos/conectar"):
@@ -296,6 +327,7 @@ if __name__ == "__main__":
         sys.exit()
     if "--sem-palmas" not in sys.argv:
         threading.Thread(target=ouvir_palmas, daemon=True).start()
+    threading.Thread(target=apps.atualizar, daemon=True).start()
     print(f"Jarvis PC pronto em http://127.0.0.1:{PORTA} (Ctrl+C para sair).")
     try:
         servidor.serve_forever()

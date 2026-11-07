@@ -1516,7 +1516,7 @@ async function analisarQuadro() {
     reconhecido = distancia < LIMITE_ROSTO;
     id.acertosSeguidos = reconhecido ? id.acertosSeguidos + 1 : 0;
     id.errosSeguidos = reconhecido ? 0 : id.errosSeguidos + 1;
-    if (!id.confirmado && id.acertosSeguidos >= 2) aoIdentificar(confianca, expressao);
+    if (!id.confirmado && (id.acertosSeguidos >= 2 || distancia < LIMITE_ROSTO * 0.75)) aoIdentificar(confianca, expressao);
     if (id.confirmado && id.errosSeguidos >= 4) {
       id.confirmado = false;
       $('scanner').classList.remove('confirmado');
@@ -2266,6 +2266,8 @@ async function abrirHolo() {
     const estado = await holo.abrir({
       raiz: $('holo'), stream: streamCamera, aoVoltar: fecharHolo, visual, clima: climaAgora,
       aoTrocarVisual: (modo) => trocarVisual(modo, { noLab: false }),
+      aoEvento: eventoDoLab,
+      apps: { listar: listarAppsPc, abrir: abrirAppPc },
     });
     registrarAtividade('Laboratório holográfico aberto', 'ok');
     return estado;
@@ -2288,8 +2290,52 @@ function fecharHolo() {
   registrarAtividade('De volta ao console', 'ok');
 }
 
-// ferramenta de cliente "holograma": o Jarvis abre o laboratório e troca as projeções pela voz
-async function usarHolograma({ acao = 'abrir', forma = '' } = {}) {
+// apps do PC para o mural do laboratório (o Jarvis PC lista o menu Iniciar com os ícones)
+async function listarAppsPc() {
+  if (!config.chave) {
+    // no modo demonstração, sem chave, usa a última lista que o Jarvis PC guardou nesta pasta (se houver)
+    if (DEMO) {
+      const r = await fetch('pc/apps.local.json');
+      if (r.ok) return r.json();
+    }
+    throw new Error('sem a chave do cérebro');
+  }
+  const r = await chamarPc('/apps');
+  if (!r.ok) throw new Error(r.mensagem || 'o Jarvis PC recusou');
+  guardar('jarvis.pc', true);
+  return r.apps || [];
+}
+
+async function abrirAppPc(app) {
+  if (!config.chave) return { ok: false, mensagem: 'Modo demonstração: sem a chave, o Jarvis PC não abre programas.' };
+  try {
+    const r = await chamarPc('/acao', { acao: 'abrir_app_id', alvo: app.id });
+    registrarAtividade(`PC: ${r.mensagem}`, r.ok ? 'ok' : 'erro');
+    return r;
+  } catch {
+    definirChip('pc', '', 'OFFLINE');
+    return { ok: false, mensagem: 'O Jarvis PC não está rodando no computador.' };
+  }
+}
+
+// o que o Renato faz no laboratório vira contexto para o Jarvis (juntando o que acontece em poucos segundos);
+// enquanto a própria voz do Jarvis está mexendo no laboratório, os avisos ficam de fora
+const lab = { fila: [], timer: 0, pelaVoz: false };
+function eventoDoLab(texto) {
+  registrarAtividade(`Laboratório: ${texto}`, 'ferramenta');
+  if (lab.pelaVoz || !conversa) return;
+  lab.fila.push(texto);
+  clearTimeout(lab.timer);
+  lab.timer = setTimeout(() => {
+    const feitos = [...new Set(lab.fila)];
+    lab.fila = [];
+    if (conversa && feitos.length) conversa.sendContextualUpdate(`[Laboratório holográfico] Agora há pouco o Renato ${feitos.join('; ')}. Se fizer sentido, comente em uma frase curta; não precisa responder a cada ação.`);
+  }, 2500);
+}
+
+// ferramenta de cliente "holograma": o Jarvis abre o laboratório, troca as projeções e os modos,
+// abre apps do PC pelo mural, cria formas no ateliê e "vê" o que está acontecendo lá
+async function usarHolograma({ acao = 'abrir', forma = '', alvo = '' } = {}) {
   if (acao === 'fechar') {
     fecharHolo();
     return 'Voltei para o console.';
@@ -2303,14 +2349,56 @@ async function usarHolograma({ acao = 'abrir', forma = '' } = {}) {
   } catch (erro) {
     return `Não consegui abrir o laboratório holográfico: ${erro.message}`;
   }
-  if (forma) return holo.mostrar(forma);
+  lab.pelaVoz = true;
+  try {
+    return await acaoNoLab(acao, forma, alvo);
+  } finally {
+    setTimeout(() => { lab.pelaVoz = false; }, 600);
+  }
+}
+
+async function acaoNoLab(acao, forma, alvo) {
+  if (acao === 'mostrar' || (forma && !['abrir_app', 'criar_forma'].includes(acao))) return holo.mostrar(forma || alvo);
   if (acao === 'desmontar') return holo.desmontar(true);
   if (acao === 'montar') return holo.desmontar(false);
   if (acao === 'girar') return holo.girar(90);
   if (acao === 'centralizar') return holo.centralizar();
+  if (acao === 'apps' || acao === 'criar' || acao === 'projecoes') return holo.modo(acao);
+  if (acao === 'abrir_app') return alvo ? holo.abrirApp(alvo) : 'Diga qual app abrir.';
+  if (acao === 'criar_forma') {
+    const pedido = normalizarTexto(alvo || forma);
+    const tipo = ['cubo', 'esfera', 'anel', 'cristal', 'piramide', 'cilindro'].find((t) => pedido.includes(t)) || 'cubo';
+    const cor = ['ciano', 'laranja', 'verde', 'violeta', 'branco', 'vermelho'].find((c) => pedido.includes(c));
+    return holo.criarForma(tipo, cor);
+  }
+  if (acao === 'desfazer') return holo.desfazerCriacao();
+  if (acao === 'limpar') return holo.limparCriacao();
+  if (acao === 'estado') return holo.descrever();
+  if (acao === 'ver') return verLaboratorio(alvo);
   const e = holo.estadoAtual();
-  return `Laboratório holográfico aberto, exibindo ${e.forma}. Projeções disponíveis: ${e.formas.join(', ')}. `
-    + 'O Renato controla com as mãos: punho gira, pinça dá zoom, mão aberta desmonta, duas mãos ampliam e deslizar troca de projeção.';
+  return `Laboratório holográfico aberto no modo ${e.modo}, exibindo ${e.forma}. Projeções: ${e.formas.join(', ')}. `
+    + 'Modos: projeções (punho gira, pinça dá zoom, mão aberta desmonta, deslizar troca), apps (aponta e faz pinça para abrir um programa do PC) '
+    + 'e criar (desenha no ar com o dedo e cria formas com a pinça). O dedo apontado vira um cursor que clica nos botões.';
+}
+
+// o Jarvis olha a cena do laboratório (com a câmera do Renato no canto) e junta com o que ele sabe do estado
+async function verLaboratorio(pergunta) {
+  const estado = holo.descrever();
+  const imagem = holo.capturar();
+  if (!imagem) return estado;
+  try {
+    const r = await chamarN8n('jarvis/visao', {
+      method: 'POST',
+      body: { imagem, pergunta: `Esta é a tela do laboratório holográfico do Jarvis, com a câmera do Renato no canto inferior direito. ${pergunta || 'Descreva o que aparece no holograma e o que o Renato está fazendo com as mãos.'}` },
+    });
+    return `${estado} O que aparece na imagem: ${r.descricao || 'não consegui interpretar a imagem.'}`;
+  } catch (erro) {
+    return `${estado} (A análise da imagem falhou: ${erro.message}.)`;
+  }
+}
+
+function normalizarTexto(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
 // ---------- cena 3D do console e visual (holograma ou foto real) ----------
@@ -2394,12 +2482,13 @@ async function tocarMusicaDeInicio({ busca = config.musica, tipo = config.musica
   if (!busca) return { ok: false, mensagem: 'Escolha a música primeiro.' };
   registrarAtividade(`Música de inicialização: ${busca}`, 'ferramenta');
   let r = await pedirMusica({ acao: 'tocar', busca, tipo, aparelho: 'pc' });
-  // Spotify fechado no PC: o Jarvis PC abre o app e tentamos de novo enquanto ele conecta
+  // Spotify ainda conectando no PC: o Jarvis PC abre o app minimizado (se não abriu ao iniciar) e
+  // tentamos de novo a cada 1,5 s; o app leva uns 4 s para abrir e mais um pouco para aparecer no Spotify
   const pcAbre = r.motivo === 'sem_aparelho' && ler('jarvis.pc', false);
   if (pcAbre) {
-    await controlarPc({ acao: 'abrir_app', alvo: 'spotify' });
-    for (let tentativa = 0; tentativa < 4 && r.motivo === 'sem_aparelho'; tentativa++) {
-      await esperar(4000);
+    await controlarPc({ acao: 'preparar_spotify' });
+    for (let tentativa = 0; tentativa < 14 && r.motivo === 'sem_aparelho'; tentativa++) {
+      await esperar(1500);
       r = await pedirMusica({ acao: 'tocar', busca, tipo, aparelho: 'pc' });
     }
   }
@@ -2830,9 +2919,15 @@ iniciarCena3D();
 let abriuAgora = true;
 try { abriuAgora = sessionStorage.getItem('jarvis.boot') !== '1'; } catch {}
 if (abriuAgora && config.musicaLigada && config.musica && config.chave && !DEMO) {
-  if (config.musicaQuando === 'rosto' && config.cameraAuto && id.rosto) musica.esperandoRosto = true;
-  else tocarMusicaDeInicio();
+  if (config.musicaQuando === 'rosto' && config.cameraAuto && id.rosto) {
+    musica.esperandoRosto = true;
+    // o Spotify já vai abrindo minimizado enquanto o Jarvis procura o rosto
+    if (ler('jarvis.pc', false)) controlarPc({ acao: 'preparar_spotify' });
+  } else {
+    tocarMusicaDeInicio();
+  }
 }
+if (config.cameraAuto && id.rosto && (config.chave || DEMO)) ligarCamera();
 boot().then(async () => {
   if (!config.chave && !DEMO) {
     definirChip('cerebro', 'off', 'SEM CHAVE');
@@ -2841,7 +2936,6 @@ boot().then(async () => {
   }
   await carregarContexto();
   pcStatus();
-  if (config.cameraAuto && id.rosto) ligarCamera();
   if (AUTO) ligar();
   if (location.hash === '#holo') abrirHolo().catch(() => {});
 });

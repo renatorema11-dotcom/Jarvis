@@ -1,15 +1,21 @@
 /*
  * holo.js — Laboratório holográfico do Jarvis.
  *
- * Uma tela inteira de projeções 3D feitas de partículas (Terra, Saturno, Reator
- * Arc, Átomo, DNA e Cidade) sobre uma mesa de projeção, controladas com as mãos
- * pela câmera, como o Tony Stark faz:
+ * Uma tela inteira com três modos, trocados no alto da tela:
+ *   PROJEÇÕES  15 projeções 3D de partículas (Terra, Lua, Sistema Solar, Galáxia,
+ *              Buraco Negro, Reator Arc, Turbina, Drone, Átomo, DNA, Molécula,
+ *              Coração, Cidade, Terreno...) sobre uma mesa de projeção
+ *   APPS       os programas do PC num mural (holo-apps.js), abertos com a mão
+ *   CRIAR      um ateliê para desenhar no ar e criar formas (holo-criar.js)
+ * O dedo apontado vira um cursor que clica em qualquer botão (pinça ou segurar parado).
+ * Nas projeções, as mãos controlam como o Tony Stark faz:
  *   punho fechado + mover  -> gira a projeção
  *   pinça + subir/descer   -> zoom
  *   mão aberta             -> desmonta; as partículas seguem a mão
  *   duas mãos              -> afastar/aproximar amplia ou reduz
  *   deslizar a mão rápido  -> troca de projeção
- * Também funciona com mouse/teclado e com a voz (ferramenta "holograma").
+ * Também funciona com mouse/teclado e com a voz (ferramenta "holograma"). O que a pessoa
+ * faz aqui vira avisos para o Jarvis (aoEvento), e capturar() tira uma foto da cena.
  *
  * Dois visuais, trocados por um botão: HOLOGRAMA (partículas, como no cinema, numa
  * sala com piso que reflete e luz volumétrica) e FOTO REAL (objetos de verdade,
@@ -25,6 +31,9 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { COR, placaFraca, materialLinha, circulo, brilho, texturaBrilho, criarSala, criarLente, ambienteEstudio, criarSom } from './cena.js';
 import { criarReal } from './holo-real.js';
+import { formaLua, formaSistemaSolar, formaGalaxia, formaBuracoNegro, formaTurbina, formaDrone, formaMolecula, formaCoracao, formaTerreno } from './holo-formas.js';
+import { criarMuralApps } from './holo-apps.js';
+import { criarAtelie } from './holo-criar.js';
 
 // ---------------- CONFIG ----------------
 const VISAO = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';
@@ -39,7 +48,17 @@ const MARCADOR = { nome: 'Campo Mourão · PR', lat: -24.05, lon: -52.38 };
 const LIGACOES_MAO = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
   [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
 const CORES_GESTO = { punho: '#ffa24c', pinca: '#5dfca0', aberta: '#4de8f0', aponta: '#b794ff', nenhum: '#8ff3f7' };
-const NOMES_GESTO = { punho: 'PUNHO · GIRAR', pinca: 'PINÇA · ZOOM', aberta: 'MÃO ABERTA · DESMONTAR', aponta: 'DEDO · TOCAR', dupla: 'DUAS MÃOS · ESCALA', nenhum: '—' };
+const NOMES_GESTO = {
+  projecoes: { punho: 'PUNHO · GIRAR', pinca: 'PINÇA · ZOOM', aberta: 'MÃO ABERTA · DESMONTAR', aponta: 'DEDO · TOCAR', dupla: 'DUAS MÃOS · ESCALA', nenhum: '—' },
+  apps: { punho: 'PUNHO', pinca: 'PINÇA · ABRIR', aberta: 'MÃO ABERTA · PÁGINA', aponta: 'DEDO · MIRAR', dupla: 'DUAS MÃOS', nenhum: '—' },
+  criar: { punho: 'PUNHO · GIRAR', pinca: 'PINÇA · CRIAR / PEGAR', aberta: 'MÃO ABERTA', aponta: 'DEDO · DESENHAR', dupla: 'DUAS MÃOS · ESCALA', nenhum: '—' },
+};
+const GUIAS = {
+  projecoes: [['punho', '✊ PUNHO · GIRAR'], ['pinca', '🤏 PINÇA · ZOOM'], ['aberta', '🖐 ABERTA · DESMONTAR'], ['aponta', '☝ DEDO · TOCAR / MIRAR'], ['dupla', '👐 DUAS MÃOS · ESCALA'], ['deslize', '↔ DESLIZAR · TROCAR']],
+  apps: [['aponta', '☝ DEDO · MIRAR'], ['pinca', '🤏 PINÇA · ABRIR'], ['segurar', '⏱ SEGURAR PARADO · ABRIR'], ['deslize', '↔ MÃO ABERTA · PÁGINA']],
+  criar: [['aponta', '☝ DEDO · DESENHAR'], ['pinca', '🤏 PINÇA · CRIAR / PEGAR'], ['punho', '✊ PUNHO · GIRAR'], ['dupla', '👐 DUAS MÃOS · ESCALA']],
+};
+const NOME_MODO = { projecoes: 'projeções', apps: 'apps', criar: 'criar' };
 
 // ---------------- estado ----------------
 const L = {
@@ -51,6 +70,20 @@ const L = {
   ultimoQuadro: 0,
   tempo: 0,
   modo: 'holo',         // 'holo' (holograma de cinema) ou 'real' (foto real)
+  modoLab: 'projecoes', // 'projecoes', 'apps' (mural de apps do PC) ou 'criar' (ateliê)
+  fatorModo: 1,         // quanto da projeção aparece no modo atual
+  cursor: { x: 0, y: 0, mao: false, alvo: null, desde: 0, carga: 0, travaAte: 0, feito: null },
+  mural: null,
+  atelie: null,
+  apps: null,
+  aoEvento: null,
+  diario: [],
+  kit: null,
+  palmaRef: 0,
+  rotCriar: { x: 0.25, y: 0, vx: 0, vy: 0 },
+  escalaCriar: 1,
+  escalaCriarAlvo: 1,
+  mouseCria: null,
   som: criarSom(),
   sala: null,
   estrelas: null,
@@ -625,6 +658,31 @@ function formaCidade() {
   };
 }
 
+// ---------------- catálogo ----------------
+// a lista do painel; cada projeção só é gerada na primeira vez que aparece
+const CATALOGO = [
+  { chave: 'terra', codigo: 'GEO-01', titulo: 'TERRA', resumo: 'Continentes de verdade', grupo: 'ESPAÇO', criar: formaTerra, apelidos: ['globo', 'planeta terra', 'mundo'] },
+  { chave: 'lua', codigo: 'LUA-07', titulo: 'LUA', resumo: 'Crateras e a fase de hoje', grupo: 'ESPAÇO', criar: formaLua },
+  { chave: 'saturno', codigo: 'AST-02', titulo: 'SATURNO', resumo: 'Faixas e anéis', grupo: 'ESPAÇO', criar: formaSaturno },
+  { chave: 'solar', codigo: 'SOL-08', titulo: 'SISTEMA SOLAR', resumo: 'O Sol e oito planetas', grupo: 'ESPAÇO', criar: formaSistemaSolar, apelidos: ['planetas', 'sol'] },
+  { chave: 'galaxia', codigo: 'GAL-09', titulo: 'VIA LÁCTEA', resumo: 'Galáxia espiral', grupo: 'ESPAÇO', criar: formaGalaxia, apelidos: ['galaxia', 'estrelas'] },
+  { chave: 'buraco', codigo: 'BHL-10', titulo: 'BURACO NEGRO', resumo: 'Disco de acreção', grupo: 'ESPAÇO', criar: formaBuracoNegro },
+  { chave: 'reator', codigo: 'ARC-03', titulo: 'REATOR ARC', resumo: 'Núcleo de energia', grupo: 'TECNOLOGIA', criar: formaReator, apelidos: ['reator arc', 'arc'] },
+  { chave: 'turbina', codigo: 'ENG-11', titulo: 'TURBINA', resumo: 'Motor a jato em corte', grupo: 'TECNOLOGIA', criar: formaTurbina, apelidos: ['motor', 'jato', 'motor a jato'] },
+  { chave: 'drone', codigo: 'DRN-12', titulo: 'DRONE', resumo: 'Quadricóptero', grupo: 'TECNOLOGIA', criar: formaDrone, apelidos: ['quadricoptero'] },
+  { chave: 'atomo', codigo: 'ATM-04', titulo: 'ÁTOMO', resumo: 'Modelo atômico', grupo: 'CIÊNCIA', criar: formaAtomo },
+  { chave: 'dna', codigo: 'BIO-05', titulo: 'DNA', resumo: 'Dupla hélice', grupo: 'CIÊNCIA', criar: formaDna },
+  { chave: 'molecula', codigo: 'MOL-13', titulo: 'MOLÉCULA', resumo: 'Cafeína', grupo: 'CIÊNCIA', criar: formaMolecula, apelidos: ['cafeina'] },
+  { chave: 'coracao', codigo: 'CRD-14', titulo: 'CORAÇÃO', resumo: 'Batendo a 72 BPM', grupo: 'CIÊNCIA', criar: formaCoracao },
+  { chave: 'cidade', codigo: 'URB-06', titulo: 'CIDADE', resumo: 'Mapa urbano', grupo: 'LUGARES', criar: formaCidade },
+  { chave: 'terreno', codigo: 'TOP-15', titulo: 'TERRENO', resumo: 'Relevo e curvas de nível', grupo: 'LUGARES', criar: formaTerreno, apelidos: ['relevo', 'montanha', 'mapa topografico'] },
+];
+
+function forma(i) {
+  L.formas[i] ??= CATALOGO[i].criar(L.kit);
+  return L.formas[i];
+}
+
 // ---------------- partículas com transformação entre formas ----------------
 function criarNuvem() {
   const geo = new THREE.BufferGeometry();
@@ -896,14 +954,31 @@ const CSS = `
   border-radius:4px; backdrop-filter:blur(8px); padding:12px 14px; }
 .holo-caixa::before{ content:""; position:absolute; top:-1px; left:-1px; width:14px; height:14px; border-top:2px solid #4de8f0; border-left:2px solid #4de8f0; }
 .holo-caixa h2{ margin:0 0 10px; font-family:'Orbitron',sans-serif; font-size:10.5px; letter-spacing:3.5px; color:#8ff3f7; }
-.holo-formas{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
-.holo-formas button{ width:100%; display:grid; grid-template-columns:auto 1fr; gap:2px 10px; align-items:center; text-align:left; cursor:pointer;
-  background:rgba(2,10,16,0.6); border:1px solid rgba(77,232,240,0.14); border-radius:3px; padding:8px 10px; color:#a9c6cd; transition:all .2s; }
-.holo-formas button:hover{ border-color:rgba(77,232,240,0.5); color:#e9f7f9; }
+.holo-formas{ list-style:none; margin:0; padding:0 4px 0 0; display:flex; flex-direction:column; gap:5px; max-height:calc(100vh - 190px); overflow-y:auto; scrollbar-width:thin; scrollbar-color:rgba(77,232,240,0.35) transparent; }
+.holo-formas .holo-grupo{ margin:6px 0 1px; font-family:'Share Tech Mono',monospace; font-size:9.5px; letter-spacing:2.5px; color:#5f8791; }
+.holo-formas .holo-grupo:first-child{ margin-top:0; }
+.holo-formas button{ width:100%; display:grid; grid-template-columns:auto 1fr; gap:1px 10px; align-items:center; text-align:left; cursor:pointer;
+  background:rgba(2,10,16,0.6); border:1px solid rgba(77,232,240,0.14); border-radius:3px; padding:6px 10px; color:#a9c6cd; transition:all .2s; }
+.holo-formas button:hover, .holo-formas button.mirado{ border-color:rgba(77,232,240,0.5); color:#e9f7f9; }
 .holo-formas button.ativo{ border-color:#4de8f0; color:#e9f7f9; box-shadow:0 0 16px rgba(77,232,240,0.25) inset; }
 .holo-formas .cod{ grid-row:span 2; font-family:'Share Tech Mono',monospace; font-size:10px; color:#4de8f0; writing-mode:vertical-rl; transform:rotate(180deg); letter-spacing:1px; }
 .holo-formas b{ font-family:'Orbitron',sans-serif; font-size:11.5px; letter-spacing:2.5px; font-weight:700; }
-.holo-formas small{ font-size:12.5px; color:#5f8791; line-height:1.2; }
+.holo-formas small{ font-size:12px; color:#5f8791; line-height:1.15; }
+.holo-modos{ display:flex; gap:3px; padding:3px; border:1px solid rgba(77,232,240,0.22); border-radius:4px; background:rgba(2,10,16,0.65); }
+.holo-modos button{ font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:2px; color:#a9c6cd; background:transparent; border:0; border-radius:3px; padding:8px 13px; cursor:pointer; transition:all .2s; }
+.holo-modos button:hover, .holo-modos button.mirado{ color:#e9f7f9; background:rgba(77,232,240,0.12); }
+.holo-modos button.ativo{ color:#01060a; background:#4de8f0; box-shadow:0 0 14px rgba(77,232,240,0.5); }
+.holo-btn.mirado{ background:rgba(77,232,240,0.16); box-shadow:0 0 18px rgba(77,232,240,0.4); }
+.holo-cursor{ position:absolute; left:0; top:0; width:46px; height:46px; margin:-23px 0 0 -23px; z-index:6; pointer-events:none; opacity:0; transition:opacity .2s; will-change:transform; }
+.holo-cursor.visivel{ opacity:1; }
+.holo-cursor svg{ width:100%; height:100%; transform:rotate(-90deg); overflow:visible; }
+.holo-cursor circle{ fill:none; stroke-width:2; }
+.holo-cursor .fundo{ stroke:rgba(77,232,240,0.4); }
+.holo-cursor .carga{ stroke:#4de8f0; stroke-width:3.5; stroke-dasharray:113.1; stroke-dashoffset:calc(113.1 * (1 - var(--carga, 0))); filter:drop-shadow(0 0 4px #4de8f0); }
+.holo-cursor i{ position:absolute; left:50%; top:50%; width:8px; height:8px; margin:-4px; border-radius:50%; background:#e9f7f9; box-shadow:0 0 10px #4de8f0, 0 0 20px #4de8f0; transition:transform .15s; }
+.holo-cursor.pinca i{ transform:scale(1.8); background:#5dfca0; box-shadow:0 0 12px #5dfca0, 0 0 24px #5dfca0; }
+.holo-cursor.pinca .fundo{ stroke:rgba(93,252,160,0.6); }
+.holo[data-modo="apps"] .holo-titulo, .holo[data-modo="apps"] .holo-dir{ display:none; }
 .holo-dados{ display:grid; grid-template-columns:auto 1fr; gap:5px 12px; margin:0; font-family:'Share Tech Mono',monospace; font-size:11.5px; }
 .holo-dados dt{ color:#5f8791; letter-spacing:1px; } .holo-dados dd{ margin:0; text-align:right; color:#e9f7f9; }
 .holo-desc{ margin:10px 0 0; font-size:14px; line-height:1.35; color:#a9c6cd; }
@@ -942,6 +1017,9 @@ const CSS = `
   .holo-marca small{ display:none; }
   .holo-marca h1{ font-size:14px; letter-spacing:3px; }
   .holo-topo .holo-btn{ padding:8px 10px; letter-spacing:1px; font-size:10px; }
+  .holo-modos{ position:absolute; top:60px; left:50%; transform:translateX(-50%); }
+  .holo-formas .holo-grupo{ display:none; }
+  .holo-formas{ max-height:none; }
 }
 @media (max-width: 440px){
   .holo-marca{ display:none; }
@@ -961,14 +1039,19 @@ function montarHud(raiz) {
     <canvas class="holo-cena" aria-label="Projeção holográfica 3D"></canvas>
     <div class="holo-topo">
       <div class="holo-marca"><h1>J.A.R.V.I.S.</h1><small>LABORATÓRIO HOLOGRÁFICO · PROJEÇÃO VOLUMÉTRICA</small></div>
+      <nav class="holo-modos" data-h="modos" aria-label="Modo do laboratório">
+        <button type="button" data-mira data-modo="projecoes">◈ <span class="holo-longo">PROJEÇÕES</span></button>
+        <button type="button" data-mira data-modo="apps">▦ <span class="holo-longo">APPS</span></button>
+        <button type="button" data-mira data-modo="criar">✎ <span class="holo-longo">CRIAR</span></button>
+      </nav>
       <div class="holo-espaco"></div>
       <div class="holo-relogio" data-h="relogio"></div>
-      <button class="holo-btn" type="button" data-h="som" aria-label="Ligar ou desligar o som">SOM</button>
-      <button class="holo-btn" type="button" data-h="visual"></button>
-      <button class="holo-btn" type="button" data-h="voltar">◂ <span class="holo-longo">VOLTAR AO </span>CONSOLE</button>
+      <button class="holo-btn" type="button" data-mira data-h="som" aria-label="Ligar ou desligar o som">SOM</button>
+      <button class="holo-btn" type="button" data-mira data-h="visual"></button>
+      <button class="holo-btn" type="button" data-mira data-h="voltar">◂ <span class="holo-longo">VOLTAR AO </span>CONSOLE</button>
     </div>
     <div class="holo-rotulos" data-h="rotulos"></div>
-    <aside class="holo-lado holo-esq">
+    <aside class="holo-lado holo-esq" data-h="esq">
       <section class="holo-caixa"><h2>PROJEÇÕES</h2><ul class="holo-formas" data-h="formas"></ul></section>
     </aside>
     <aside class="holo-lado holo-dir">
@@ -976,17 +1059,15 @@ function montarHud(raiz) {
       <section class="holo-caixa"><h2>CONTROLE</h2><div class="holo-gesto" data-h="gesto">—</div>
         <dl class="holo-dados" data-h="controle" style="margin-top:8px"></dl>
         <div class="holo-acoes" style="margin-top:10px">
-          <button class="holo-btn" type="button" data-h="desmontar">DESMONTAR</button>
-          <button class="holo-btn" type="button" data-h="centralizar">CENTRALIZAR</button>
+          <button class="holo-btn" type="button" data-mira data-h="desmontar">DESMONTAR</button>
+          <button class="holo-btn" type="button" data-mira data-h="centralizar">CENTRALIZAR</button>
         </div>
       </section>
     </aside>
     <div class="holo-titulo"><span data-h="codigo"></span><strong data-h="titulo"></strong></div>
-    <div class="holo-guia" data-h="guia">
-      <span data-g="punho">✊ PUNHO · GIRAR</span><span data-g="pinca">🤏 PINÇA · ZOOM</span><span data-g="aberta">🖐 ABERTA · DESMONTAR</span>
-      <span data-g="aponta">☝ DEDO · TOCAR</span><span data-g="dupla">👐 DUAS MÃOS · ESCALA</span><span data-g="deslize">↔ DESLIZAR · TROCAR</span>
-    </div>
+    <div class="holo-guia" data-h="guia"></div>
     <div class="holo-camera"><video playsinline muted></video><p data-h="camera">CÂMERA · INICIANDO</p></div>
+    <div class="holo-cursor" data-h="cursor"><svg viewBox="0 0 46 46"><circle class="fundo" cx="23" cy="23" r="18"/><circle class="carga" cx="23" cy="23" r="18"/></svg><i></i></div>
     <div class="holo-flash" data-h="flash"></div>
     <div class="holo-aviso" data-h="aviso">INICIALIZANDO PROJETOR…</div>`;
   const h = {};
@@ -1010,22 +1091,46 @@ function montarHud(raiz) {
   h.som.classList.toggle('quieto', !L.som.ligado);
   h.desmontar.addEventListener('click', () => desmontar(!L.desmontadoPorComando));
   h.centralizar.addEventListener('click', centralizar);
+  h.modos.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-modo]');
+    if (b) modo(b.dataset.modo);
+  });
+  desenharGuia();
   return raiz.querySelector('canvas');
 }
 
 function desenharListaFormas() {
-  L.hud.formas.replaceChildren(...L.formas.map((f, i) => {
+  const itens = [];
+  CATALOGO.forEach((c, i) => {
+    if (c.grupo !== CATALOGO[i - 1]?.grupo) {
+      const cab = document.createElement('li');
+      cab.className = 'holo-grupo';
+      cab.textContent = c.grupo;
+      itens.push(cab);
+    }
     const li = document.createElement('li');
     const b = document.createElement('button');
     b.type = 'button';
+    b.dataset.mira = '';
     b.className = i === L.indice ? 'ativo' : '';
-    b.innerHTML = `<span class="cod">${f.codigo}</span><b>${f.titulo}</b><small>${f.descricao.split(':')[0].split(',')[0]}</small>`;
+    b.innerHTML = `<span class="cod">${c.codigo}</span><b>${c.titulo}</b><small>${c.resumo}</small>`;
     b.addEventListener('click', () => {
       L.som.clique();
       mostrar(i);
     });
     li.append(b);
-    return li;
+    itens.push(li);
+  });
+  L.hud.formas.replaceChildren(...itens);
+  L.hud.formas.querySelector('button.ativo')?.scrollIntoView({ block: 'nearest' });
+}
+
+function desenharGuia() {
+  L.hud.guia.replaceChildren(...GUIAS[L.modoLab].map(([g, texto]) => {
+    const s = document.createElement('span');
+    s.dataset.g = g;
+    s.textContent = texto;
+    return s;
   }));
 }
 
@@ -1035,10 +1140,11 @@ function atualizarHud() {
   const h = L.hud;
   h.relogio.textContent = new Date().toLocaleTimeString('pt-BR', { hour12: false });
   const grau = (r) => `${Math.round(THREE.MathUtils.radToDeg(r) % 360)}°`;
-  const dados = typeof f.dados === 'function' ? f.dados() : f.dados;
+  const dados = L.modoLab === 'apps' ? L.mural.dados() : L.modoLab === 'criar' ? L.atelie.dados() : (typeof f.dados === 'function' ? f.dados() : f.dados);
   h.dados.innerHTML = dados.map(([k, v]) => `<dt>${k.toUpperCase()}</dt><dd>${v}</dd>`).join('');
   const maos = L.maos.length;
   h.controle.innerHTML = [
+    ['MODO', NOME_MODO[L.modoLab].toUpperCase()],
     ['MÃOS', L.detector ? (maos ? `${maos} DETECTADA${maos > 1 ? 'S' : ''}` : 'AGUARDANDO') : 'CARREGANDO'],
     ['ESCALA', `${L.escala.toFixed(2)}×`],
     ['ROTAÇÃO', `${grau(L.rot.x)} / ${grau(L.rot.y)}`],
@@ -1047,8 +1153,11 @@ function atualizarHud() {
     ['VISUAL', L.modo === 'real' ? 'FOTO REAL' : 'HOLOGRAMA'],
     ['QUALIDADE', L.economia ? 'ECONÔMICA' : 'MÁXIMA'],
   ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-  h.gesto.textContent = NOMES_GESTO[L.duas ? 'dupla' : L.gesto] || '—';
-  for (const s of h.guia.children) s.classList.toggle('ativo', s.dataset.g === (L.duas ? 'dupla' : L.gesto) || (s.dataset.g === 'deslize' && performance.now() - L.trocaEm < 700));
+  h.gesto.textContent = NOMES_GESTO[L.modoLab][L.duas ? 'dupla' : L.gesto] || '—';
+  for (const s of h.guia.children) {
+    s.classList.toggle('ativo', s.dataset.g === (L.duas ? 'dupla' : L.gesto) || (s.dataset.g === 'deslize' && performance.now() - L.trocaEm < 700)
+      || (s.dataset.g === 'segurar' && L.cursor.carga > 0.05));
+  }
   h.desmontar.textContent = L.desmontadoPorComando ? 'MONTAR' : 'DESMONTAR';
   h.desmontar.classList.toggle('ativo', L.desmontadoPorComando);
 }
@@ -1077,7 +1186,7 @@ function atualizarRotulos() {
   if (!L.rotulosDom.length) return;
   const w = L.raiz.clientWidth;
   const h = L.raiz.clientHeight;
-  const geral = L.intro > 0.85 && L.morph >= 1 && L.explosao < 0.3;
+  const geral = L.modoLab === 'projecoes' && L.intro > 0.85 && L.morph >= 1 && L.explosao < 0.3;
   L.projecao.getWorldPosition(centroProj);
   for (const item of L.rotulosDom) {
     const { r, linha, caixa, valor } = item;
@@ -1110,12 +1219,17 @@ function atualizarRotulos() {
 }
 
 function mostrarTitulo(f) {
-  L.hud.codigo.textContent = `${f.codigo} · PROJEÇÃO ATIVA`;
+  const [codigo, titulo, descricao] = L.modoLab === 'criar'
+    ? ['CRIAÇÃO · MÃOS LIVRES', 'ATELIÊ', 'Aponte o dedo para desenhar no ar. Escolha uma forma e faça pinça para criar; afaste os dedos para aumentar. Pinça perto de algo pega e move. Punho gira tudo, duas mãos ampliam.']
+    : L.modoLab === 'apps'
+      ? ['PROGRAMAS DO PC', 'APPS', 'Aponte para um app e faça pinça, ou segure parado um instante, para abrir no computador. Mão aberta deslizando troca de página.']
+      : [`${f.codigo} · PROJEÇÃO ATIVA`, f.titulo, f.descricao];
+  L.hud.codigo.textContent = codigo;
   const novo = L.hud.titulo.cloneNode(false);
-  novo.textContent = f.titulo;
+  novo.textContent = titulo;
   L.hud.titulo.replaceWith(novo);
   L.hud.titulo = novo;
-  L.hud.desc.textContent = f.descricao;
+  L.hud.desc.textContent = descricao;
 }
 
 // ---------------- mãos (MediaPipe) ----------------
@@ -1177,6 +1291,82 @@ function pontoNoMundo(norm) {
   return raio.ray.intersectPlane(plano, alvo) ? alvo : null;
 }
 
+// o dedo apontado (ou a pinça) vira um cursor na tela: mira qualquer botão marcado com data-mira;
+// pinça fecha = clique na hora, e segurar parado em cima também clica
+function atualizarCursorMao(m, antes, agora) {
+  const c = L.cursor;
+  const ativo = !!m && (m.gesto === 'aponta' || m.gesto === 'pinca' || (L.modoLab === 'apps' && m.gesto === 'nenhum'));
+  if (!ativo) {
+    c.mao = false;
+    mirar(null, agora);
+    return;
+  }
+  const ponto = m.gesto === 'pinca' ? m.pontaPinca : m.pts[8];
+  const w = L.raiz.clientWidth;
+  const h = L.raiz.clientHeight;
+  // com um pouco de ganho a mão não precisa ir até a borda da câmera para chegar na borda da tela
+  const x = THREE.MathUtils.clamp(w / 2 + ((1 - ponto.x) * w - w / 2) * 1.35, 0, w);
+  const y = THREE.MathUtils.clamp(h / 2 + (ponto.y * h - h / 2) * 1.35, 0, h);
+  c.x = c.mao ? c.x + (x - c.x) * 0.5 : x;
+  c.y = c.mao ? c.y + (y - c.y) * 0.5 : y;
+  c.mao = true;
+  const caixa = L.raiz.getBoundingClientRect();
+  let alvo = document.elementFromPoint(caixa.left + c.x, caixa.top + c.y)?.closest('[data-mira]') || null;
+  if (alvo && (!L.raiz.contains(alvo) || alvo.closest('[hidden]'))) alvo = null;
+  if (L.modoLab === 'criar' && L.atelie.ocupado()) alvo = null;
+  mirar(alvo, agora);
+  if (!alvo) return;
+  // segurar parado clica uma vez só: para repetir no mesmo botão, tira o dedo e volta (ou faz pinça)
+  c.carga = alvo === c.feito ? 0 : Math.min(1, Math.max(0, agora - c.desde) / Number(alvo.dataset.esperar || 850));
+  alvo.style.setProperty('--carga', c.carga.toFixed(3));
+  const pincou = m.gesto === 'pinca' && antes?.gesto !== 'pinca';
+  if ((pincou || c.carga >= 1) && agora > c.travaAte) {
+    c.travaAte = agora + 700;
+    c.feito = alvo;
+    c.carga = 0;
+    alvo.click();
+  }
+}
+
+function mirar(alvo, agora) {
+  const c = L.cursor;
+  if (alvo === c.alvo) return;
+  c.alvo?.classList.remove('mirado');
+  c.alvo?.style.removeProperty('--carga');
+  c.alvo = alvo;
+  c.desde = agora;
+  c.carga = 0;
+  c.feito = null;
+  alvo?.classList.add('mirado');
+}
+
+function desenharCursor() {
+  const c = L.cursor;
+  const el = L.hud.cursor;
+  el.classList.toggle('visivel', c.mao);
+  if (!c.mao) return;
+  el.style.transform = `translate(${c.x}px, ${c.y}px)`;
+  el.style.setProperty('--carga', c.alvo ? c.carga.toFixed(3) : 0);
+  el.classList.toggle('pinca', L.gesto === 'pinca');
+}
+
+// ponto do ateliê embaixo de uma posição da tela; a mão mais perto da câmera traz o ponto para a frente
+function pontoNaCriacao(ndc, palma = 0) {
+  const g = L.atelie.grupo;
+  raio.setFromCamera(ndc, L.camera);
+  const dir = L.camera.getWorldDirection(new THREE.Vector3());
+  plano.setFromNormalAndCoplanarPoint(dir.clone().negate(), g.getWorldPosition(new THREE.Vector3()));
+  const alvo = new THREE.Vector3();
+  if (!raio.ray.intersectPlane(plano, alvo)) return null;
+  if (palma) {
+    if (!L.palmaRef) L.palmaRef = palma;
+    alvo.addScaledVector(dir, -THREE.MathUtils.clamp((palma / L.palmaRef - 1) * 3.5, -2.2, 2.2));
+  }
+  return g.worldToLocal(alvo);
+}
+
+const ndcDaTela = (x, y) => new THREE.Vector2((x / L.raiz.clientWidth) * 2 - 1, -((y / L.raiz.clientHeight) * 2 - 1));
+
 function processarMaos(agora) {
   if (!L.detector || !L.video || L.video.readyState < 2 || L.video.currentTime === L.ultimoTempoVideo) return;
   L.ultimoTempoVideo = L.video.currentTime;
@@ -1199,47 +1389,78 @@ function processarMaos(agora) {
   if (novas.length) L.ultimaMaoEm = agora;
   desenharMaos();
   L.dedoAlvo = 0;
+  const m = novas[0];
+  const antes = anteriores[0];
+  atualizarCursorMao(novas.length === 2 ? null : m, antes, agora);
+  const criando = L.modoLab === 'criar';
 
   // duas mãos abertas ou em pinça: afastar amplia, aproximar reduz
-  if (novas.length === 2 && novas.every((m) => m.gesto === 'aberta' || m.gesto === 'pinca')) {
+  if (novas.length === 2 && novas.every((x) => x.gesto === 'aberta' || x.gesto === 'pinca')) {
+    const chave = criando ? 'escalaCriarAlvo' : 'escalaAlvo';
     const dist = Math.hypot(novas[0].centro.x - novas[1].centro.x, novas[0].centro.y - novas[1].centro.y);
-    if (!L.duas) L.duas = { dist, escala: L.escalaAlvo };
-    L.escalaAlvo = THREE.MathUtils.clamp(L.duas.escala * (dist / L.duas.dist), 0.35, 2.8);
+    if (!L.duas) L.duas = { dist, escala: L[chave] };
+    L[chave] = THREE.MathUtils.clamp(L.duas.escala * (dist / L.duas.dist), 0.35, 2.8);
     L.gesto = 'dupla';
     L.explosaoAlvo = L.desmontadoPorComando ? 2.2 : 0;
     L.atracaoAlvo = 0;
+    L.atelie?.soltar();
     return;
   }
   L.duas = null;
-  const m = novas[0];
-  const antes = anteriores[0];
   if (!m) {
     L.gesto = 'nenhum';
     L.gestoAntes = 'nenhum';
     L.historico = [];
     L.explosaoAlvo = L.desmontadoPorComando ? 2.2 : 0;
     L.atracaoAlvo = 0;
+    L.atelie?.soltar();
     return;
   }
   L.gesto = m.gesto;
   if (m.gesto !== L.gestoAntes) {
-    if (m.gesto === 'punho' || m.gesto === 'pinca') L.som.agarrar();
-    if (m.gesto === 'aberta') L.som.desmontar();
-    if (L.gestoAntes === 'aberta') L.som.montar();
+    if (m.gesto === 'punho' || (m.gesto === 'pinca' && !criando)) L.som.agarrar();
+    if (L.modoLab === 'projecoes') {
+      if (m.gesto === 'aberta') L.som.desmontar();
+      if (L.gestoAntes === 'aberta') L.som.montar();
+    }
     L.gestoAntes = m.gesto;
   }
-  if (m.gesto === 'aponta') {
+  const rot = criando ? L.rotCriar : L.rot;
+  if (m.gesto === 'punho' && antes && L.modoLab !== 'apps') {
+    rot.vy = ((1 - m.centro.x) - (1 - antes.centro.x)) * 7;
+    rot.vx = (m.centro.y - antes.centro.y) * 5;
+  }
+  if (L.modoLab === 'apps') {
+    // mão aberta deslizando para o lado troca a página do mural
+    if (m.gesto === 'aberta') {
+      L.historico.push({ t: agora, x: 1 - m.centro.x });
+      L.historico = L.historico.filter((h) => agora - h.t < 320);
+      const dx = L.historico.length > 2 ? L.historico[L.historico.length - 1].x - L.historico[0].x : 0;
+      if (Math.abs(dx) > 0.3 && agora - L.trocaEm > 1000) {
+        L.trocaEm = agora;
+        L.historico = [];
+        L.mural.pagina(dx > 0 ? -1 : 1);
+      }
+    } else {
+      L.historico = [];
+    }
+    return;
+  }
+  if (criando) {
+    if (L.cursor.alvo || !L.cursor.mao) {
+      L.atelie.soltar();
+      return;
+    }
+    const p = pontoNaCriacao(ndcDaTela(L.cursor.x, L.cursor.y), m.palma);
+    if (p) L.atelie.entrada(m.gesto, p);
+    return;
+  }
+  if (m.gesto === 'aponta' && !L.cursor.alvo) {
     const ponta = pontoNoMundo(m.pts[8]);
     if (ponta) L.nuvem.material.uniforms.uDedo.value.copy(L.nuvem.worldToLocal(ponta));
     L.dedoAlvo = 1;
   }
-  if (m.gesto === 'punho' && antes) {
-    const dx = (1 - m.centro.x) - (1 - antes.centro.x);
-    const dy = m.centro.y - antes.centro.y;
-    L.rot.vy = dx * 7;
-    L.rot.vx = dy * 5;
-  }
-  if (m.gesto === 'pinca' && antes && antes.gesto === 'pinca') {
+  if (m.gesto === 'pinca' && antes && antes.gesto === 'pinca' && !L.cursor.alvo) {
     L.escalaAlvo = THREE.MathUtils.clamp(L.escalaAlvo * (1 - (m.pontaPinca.y - antes.pontaPinca.y) * 3.2), 0.35, 2.8);
   }
   if (m.gesto === 'aberta') {
@@ -1294,28 +1515,55 @@ function ligarControlesManuais(canvas) {
     L.ponteiro.x = (e.clientX / innerWidth - 0.5) * 2;
     L.ponteiro.y = (e.clientY / innerHeight - 0.5) * 2;
   });
+  // no ateliê o botão esquerdo desenha, cria ou move (conforme a ferramenta); no vazio, gira
+  const pontoDoMouse = (e) => {
+    const caixa = L.raiz.getBoundingClientRect();
+    return pontoNaCriacao(ndcDaTela(e.clientX - caixa.left, e.clientY - caixa.top));
+  };
   canvas.addEventListener('pointerdown', (e) => {
-    L.arraste = { x: e.clientX, y: e.clientY };
     canvas.setPointerCapture(e.pointerId);
+    if (L.modoLab === 'criar' && e.button === 0) {
+      const gesto = L.atelie.ferramenta() === 'desenhar' ? 'aponta' : 'pinca';
+      const p = pontoDoMouse(e);
+      if (p) L.atelie.entrada(gesto, p);
+      if (L.atelie.ocupado()) {
+        L.mouseCria = { gesto };
+        return;
+      }
+      L.atelie.soltar();
+    }
+    L.arraste = { x: e.clientX, y: e.clientY };
   });
   canvas.addEventListener('pointermove', (e) => {
+    if (L.mouseCria) {
+      const p = pontoDoMouse(e);
+      if (p) L.atelie.entrada(L.mouseCria.gesto, p);
+      return;
+    }
     if (!L.arraste) return;
-    L.rot.vy = (e.clientX - L.arraste.x) * 0.006;
-    L.rot.vx = (e.clientY - L.arraste.y) * 0.004;
+    const rot = L.modoLab === 'criar' ? L.rotCriar : L.rot;
+    rot.vy = (e.clientX - L.arraste.x) * 0.006;
+    rot.vx = (e.clientY - L.arraste.y) * 0.004;
     L.arraste = { x: e.clientX, y: e.clientY };
   });
-  const soltar = () => { L.arraste = null; };
+  const soltar = () => {
+    if (L.mouseCria) L.atelie.soltar();
+    L.mouseCria = null;
+    L.arraste = null;
+  };
   canvas.addEventListener('pointerup', soltar);
   canvas.addEventListener('pointercancel', soltar);
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    L.escalaAlvo = THREE.MathUtils.clamp(L.escalaAlvo * (1 - e.deltaY * 0.0012), 0.35, 2.8);
+    const chave = L.modoLab === 'criar' ? 'escalaCriarAlvo' : 'escalaAlvo';
+    L[chave] = THREE.MathUtils.clamp(L[chave] * (1 - e.deltaY * 0.0012), 0.35, 2.8);
   }, { passive: false });
-  canvas.addEventListener('dblclick', () => desmontar(!L.desmontadoPorComando));
+  canvas.addEventListener('dblclick', () => { if (L.modoLab === 'projecoes') desmontar(!L.desmontadoPorComando); });
   addEventListener('keydown', (e) => {
     if (!L.aberto || e.target.closest?.('input, textarea')) return;
-    if (e.key === 'ArrowRight') mostrar(L.indice + 1);
-    else if (e.key === 'ArrowLeft') mostrar(L.indice - 1);
+    if (e.key === 'ArrowRight') (L.modoLab === 'apps' ? L.mural.pagina(1) : mostrar(L.indice + 1));
+    else if (e.key === 'ArrowLeft') (L.modoLab === 'apps' ? L.mural.pagina(-1) : mostrar(L.indice - 1));
+    else if (e.key === 'z' && (e.ctrlKey || e.metaKey) && L.modoLab === 'criar') L.atelie.desfazer();
     else if (e.key === 'Escape') L.aoVoltar?.();
     else if (e.key === ' ') {
       e.preventDefault();
@@ -1379,9 +1627,16 @@ async function montarCena(canvas) {
     camera.add(v.grupo);
   }
 
-  L.formas = [formaTerra(), formaSaturno(), formaReator(), formaAtomo(), formaDna(), formaCidade()];
+  L.kit = { gerador, q, total: TOTAL, projecao: L.projecao, nuvem: L.nuvem };
+  L.formas = CATALOGO.map(() => null);
+  L.atelie = criarAtelie({ cena, raiz: L.raiz, som: L.som, aoEvento: avisar });
+  L.mural = criarMuralApps({
+    raiz: L.raiz, som: L.som, aoEvento: avisar,
+    listar: () => (L.apps?.listar ? L.apps.listar() : Promise.reject(new Error('sem acesso ao PC'))),
+    abrir: (app) => (L.apps?.abrir ? L.apps.abrir(app) : Promise.resolve({ ok: false, mensagem: 'Sem acesso ao Jarvis PC.' })),
+  });
   const geo = L.nuvem.geometry;
-  const f = L.formas[0];
+  const f = forma(0);
   // começa vindo de uma esfera espalhada, para a primeira projeção "montar" na frente da pessoa
   const espalhada = new Float32Array(TOTAL * 3);
   for (let i = 0; i < TOTAL; i++) {
@@ -1424,7 +1679,7 @@ function definirEconomia(sim) {
   }
   L.renderer.setPixelRatio(sim ? 1 : Math.min(devicePixelRatio, 1.5));
   L.sala.usarReflexo(!sim);
-  L.raios.visible = !sim && L.modo === 'holo';
+  L.raios.visible = !sim && L.modo === 'holo' && L.modoLab === 'projecoes';
   ajustarTamanho();
 }
 
@@ -1452,25 +1707,30 @@ function obterReal(f) {
 function aplicarModo() {
   const real = L.modo === 'real';
   const f = L.formas[L.indice];
+  const projetando = L.modoLab === 'projecoes';
   const r = real ? obterReal(f) : null;
-  const espaco = !!r && r.ambiente === 'espaco';
+  // o espaço só some a sala quando a projeção está na frente; nos apps e no ateliê fica a sala
+  const espaco = !!r && r.ambiente === 'espaco' && projetando;
   L.sala.grupo.visible = !espaco;
   L.mesa.mesa.visible = !espaco;
   L.estrelas.visible = espaco;
   L.mesa.holoMesa.visible = !real;
-  L.raios.visible = !real && !L.economia;
+  L.raios.visible = !real && !L.economia && projetando;
   L.linhas.visible = !real;
   L.luzSol.visible = real;
   L.luzCeu.visible = real && !espaco;
   L.luzSol.position.set(-6, 9, 7);
   L.cena.fog = espaco ? null : L.neblina;
-  L.cena.environmentIntensity = real ? 0.38 : 0.45;
+  // no espaço só o sol ilumina: a luz de estúdio da sala deixaria a noite dos planetas acesa
+  L.cena.environmentIntensity = real ? (espaco ? 0 : 0.38) : 0.45;
   L.renderer.toneMapping = real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   L.renderer.toneMappingExposure = 0.95;
   L.bloom.strength = real ? 0.22 : 0.42;
   L.bloom.threshold = real ? 1 : 0.42;
-  for (const outra of L.formas) if (outra !== f && outra.real) outra.real.grupo.visible = false;
-  if (!real && f.real) f.real.grupo.visible = false;
+  for (const outra of L.formas) if (outra && outra !== f && outra.real) outra.real.grupo.visible = false;
+  if ((!real || !projetando) && f.real) f.real.grupo.visible = false;
+  L.atelie.aplicarVisual(real);
+  L.raiz.dataset.visual = L.modo;
   const rotuloBotao = real ? '◐ <span class="holo-longo">VISUAL </span>HOLOGRAMA' : '◉ <span class="holo-longo">VISUAL </span>FOTO REAL';
   L.hud.visual.innerHTML = rotuloBotao;
 }
@@ -1487,15 +1747,21 @@ function quadro(agora) {
   L.fps = Math.round(L.fps * 0.9 + (1 / delta) * 0.1);
   processarMaos(performance.now());
 
-  // giro com inércia; parado, gira sozinho bem devagar
-  const ocioso = !L.arraste && performance.now() - L.ultimaMaoEm > 1500;
-  L.rot.y += L.rot.vy + (ocioso ? dt * 0.1 : 0);
-  L.rot.x = THREE.MathUtils.clamp(L.rot.x + L.rot.vx, -1.2, 1.2);
-  L.rot.vy *= 0.9;
-  L.rot.vx *= 0.9;
+  // giro com inércia; parado, a projeção gira sozinha bem devagar (o ateliê fica parado)
+  const criando = L.modoLab === 'criar';
+  const rot = criando ? L.rotCriar : L.rot;
+  const ocioso = !L.arraste && performance.now() - L.ultimaMaoEm > 1500 && !criando;
+  rot.y += rot.vy + (ocioso ? dt * 0.1 : 0);
+  rot.x = THREE.MathUtils.clamp(rot.x + rot.vx, -1.2, 1.2);
+  rot.vy *= 0.9;
+  rot.vx *= 0.9;
   L.projecao.rotation.set(L.rot.x, L.rot.y, 0);
   L.escala = THREE.MathUtils.lerp(L.escala, L.escalaAlvo, 0.12);
   L.projecao.scale.setScalar(L.escala);
+  L.atelie.grupo.rotation.set(L.rotCriar.x, L.rotCriar.y, 0);
+  L.escalaCriar = THREE.MathUtils.lerp(L.escalaCriar, L.escalaCriarAlvo, 0.12);
+  L.atelie.grupo.scale.setScalar(L.escalaCriar);
+  L.fatorModo = THREE.MathUtils.lerp(L.fatorModo, { projecoes: 1, apps: 0.18, criar: 0 }[L.modoLab], 0.08);
   L.explosao = THREE.MathUtils.lerp(L.explosao, L.explosaoAlvo, L.explosaoAlvo > L.explosao ? 0.05 : 0.12);
   L.atracao = THREE.MathUtils.lerp(L.atracao, L.atracaoAlvo, 0.08);
   L.dedoForca = THREE.MathUtils.lerp(L.dedoForca, L.dedoAlvo, 0.15);
@@ -1540,18 +1806,18 @@ function quadro(agora) {
   // visual foto real: o objeto de verdade aparece quando as partículas terminam de chegar;
   // ao desmontar, ele volta a virar partículas
   const real = L.modo === 'real' ? obterReal(f) : null;
-  const mostrarReal = !!real && real.carregado && !real.falhou && L.morph >= 1 && L.explosao < 0.12;
+  const mostrarReal = !!real && real.carregado && !real.falhou && L.morph >= 1 && L.explosao < 0.12 && L.modoLab === 'projecoes';
   if (real) {
     real.grupo.visible = mostrarReal;
     if (mostrarReal) real.animar(t, { camera: L.camera, projecao: L.projecao, luzSol: L.luzSol });
   }
   L.opNuvem = THREE.MathUtils.lerp(L.opNuvem, mostrarReal ? 0 : 1, mostrarReal ? 0.1 : 0.25);
-  u.uOpacidade.value = L.opNuvem;
-  L.nuvem.visible = L.opNuvem > 0.01;
+  u.uOpacidade.value = L.opNuvem * L.fatorModo;
+  L.nuvem.visible = L.opNuvem * L.fatorModo > 0.01;
 
   // as linhas da forma somem quando ela desmonta e acendem quando a transformação termina
   // (animações de piscar usam userData.pulso, para não brigar com esse apagar)
-  const visLinhas = Math.max(0, Math.min(1, (L.morph - 0.55) / 0.45)) * (1 - Math.min(1, L.explosao / 1.2));
+  const visLinhas = Math.max(0, Math.min(1, (L.morph - 0.55) / 0.45)) * (1 - Math.min(1, L.explosao / 1.2)) * L.fatorModo;
   const aplicar = (o) => {
     if (o.material) {
       o.material.userData.base ??= o.material.opacity;
@@ -1562,6 +1828,8 @@ function quadro(agora) {
   if (f.comuns) f.comuns.traverse(aplicar);
 
   L.sala.animar(delta);
+  L.atelie.animar(t);
+  desenharCursor();
   if (L.modo === 'holo') {
     L.mesa.anelMarcas.rotation.y = t * 0.15;
     L.mesa.facho.material.uniforms.uTempo.value = t;
@@ -1598,9 +1866,11 @@ function quadro(agora) {
 }
 
 // ---------------- API usada pelo console ----------------
-export async function abrir({ raiz, stream = null, aoVoltar = null, visual = 'holo', clima = '', aoTrocarVisual = null } = {}) {
+export async function abrir({ raiz, stream = null, aoVoltar = null, visual = 'holo', clima = '', aoTrocarVisual = null, aoEvento = null, apps = null } = {}) {
   L.aoVoltar = aoVoltar;
   L.aoTrocarVisual = aoTrocarVisual;
+  L.aoEvento = aoEvento;
+  L.apps = apps;
   L.clima = clima;
   if (L.aberto) return estadoAtual();
   raiz.hidden = false;
@@ -1613,6 +1883,8 @@ export async function abrir({ raiz, stream = null, aoVoltar = null, visual = 'ho
     desenharListaFormas();
     mostrarTitulo(L.formas[0]);
     montarRotulos(L.formas[0]);
+    for (const b of L.hud.modos.children) b.classList.toggle('ativo', b.dataset.modo === L.modoLab);
+    L.raiz.dataset.modo = L.modoLab;
     L.pronto = true;
   }
   L.hud.aviso.textContent = '';
@@ -1644,15 +1916,20 @@ export function fechar() {
   L.stream = null;
   if (L.video) L.video.srcObject = null;
   L.maos = [];
+  L.cursor.mao = false;
+  L.atelie?.soltar();
   if (L.raiz) L.raiz.hidden = true;
 }
 
 export function mostrar(alvo) {
   if (!L.pronto) return 'O laboratório ainda não abriu.';
-  let i = typeof alvo === 'number' ? alvo : L.formas.findIndex((f) => normalizar(f.titulo).includes(normalizar(alvo)) || f.chave === normalizar(alvo));
-  if (i < 0) return `Não tenho a projeção "${alvo}". Tenho: ${L.formas.map((f) => f.titulo).join(', ')}.`;
-  i = (i + L.formas.length) % L.formas.length;
-  if (i === L.indice && L.morph >= 1) return `Já estou exibindo ${L.formas[i].titulo}.`;
+  const procurado = normalizar(alvo);
+  let i = typeof alvo === 'number' ? alvo : CATALOGO.findIndex((c) => [c.titulo, c.chave, ...(c.apelidos || [])].some((n) => normalizar(n) === procurado));
+  if (i < 0 && typeof alvo !== 'number') i = CATALOGO.findIndex((c) => normalizar(c.titulo).includes(procurado) || (c.apelidos || []).some((n) => normalizar(n).includes(procurado)));
+  if (i < 0) return `Não tenho a projeção "${alvo}". Tenho: ${CATALOGO.map((c) => c.titulo).join(', ')}.`;
+  i = (i + CATALOGO.length) % CATALOGO.length;
+  if (L.modoLab !== 'projecoes') modo('projecoes');
+  if (i === L.indice && L.morph >= 1) return `Já estou exibindo ${CATALOGO[i].titulo}.`;
   L.som.transformar();
   const geo = L.nuvem.geometry;
   // de onde as partículas estão agora até a nova forma
@@ -1666,7 +1943,7 @@ export function mostrar(alvo) {
     cor[k] += (corDest[k] - cor[k]) * m;
   }
   const antiga = L.formas[L.indice];
-  const f = L.formas[i];
+  const f = forma(i);
   dest.set(f.posicoes);
   corDest.set(f.cores);
   for (const nome of ['position', 'cor', 'destino', 'corDestino']) geo.attributes[nome].needsUpdate = true;
@@ -1685,11 +1962,16 @@ export function mostrar(alvo) {
   desenharListaFormas();
   mostrarTitulo(f);
   montarRotulos(f);
+  avisar(`trocou a projeção para ${f.titulo}`);
   return `Exibindo ${f.titulo}: ${f.descricao}`;
 }
 
 export function desmontar(sim = true) {
-  if (L.desmontadoPorComando !== !!sim) (sim ? L.som.desmontar() : L.som.montar());
+  if (L.desmontadoPorComando !== !!sim) {
+    if (sim) L.som.desmontar();
+    else L.som.montar();
+    avisar(sim ? 'desmontou a projeção em partículas' : 'montou a projeção de novo');
+  }
   L.desmontadoPorComando = !!sim;
   L.explosaoAlvo = sim ? 2.2 : 0;
   L.atracaoAlvo = 0;
@@ -1725,12 +2007,116 @@ export function definirVisual(modo, { avisarConsole = true } = {}) {
     L.hud.flash.classList.remove('ativo');
   }, 240);
   if (avisarConsole) L.aoTrocarVisual?.(novo);
+  avisar(`trocou o visual do laboratório para ${novo === 'real' ? 'foto real' : 'holograma'}`);
   return novo;
+}
+
+// troca o modo do laboratório: projeções, mural de apps ou ateliê de criação
+export function modo(novo) {
+  if (!GUIAS[novo]) return 'Os modos do laboratório são projeções, apps e criar.';
+  if (!L.pronto) {
+    L.modoLab = novo;
+    return `Modo ${NOME_MODO[novo]}.`;
+  }
+  if (novo === L.modoLab) return `Já estou no modo ${NOME_MODO[novo]}.`;
+  // cada modo guarda o próprio giro: a projeção e a criação não se misturam
+  L.modoLab = novo;
+  L.som.transformar();
+  L.arraste = null;
+  L.palmaRef = 0;
+  L.historico = [];
+  mirar(null, performance.now());
+  L.atelie.ativar(novo === 'criar');
+  if (novo === 'apps') L.mural.mostrar();
+  else L.mural.esconder();
+  L.hud.esq.hidden = novo !== 'projecoes';
+  if (novo !== 'projecoes') {
+    L.desmontadoPorComando = false;
+    L.explosaoAlvo = 0;
+    L.atracaoAlvo = 0;
+  }
+  L.raiz.dataset.modo = novo;
+  for (const b of L.hud.modos.children) b.classList.toggle('ativo', b.dataset.modo === novo);
+  aplicarModo();
+  desenharGuia();
+  mostrarTitulo(L.formas[L.indice]);
+  const f = L.formas[L.indice];
+  avisar(novo === 'apps' ? 'abriu o mural de apps do laboratório' : novo === 'criar' ? 'entrou no ateliê para criar com as mãos' : `voltou para as projeções (${f.titulo})`);
+  return novo === 'apps' ? 'Mural de apps aberto: ele aponta e faz pinça para abrir um programa.'
+    : novo === 'criar' ? 'Ateliê aberto: ele desenha no ar com o dedo e cria formas com a pinça.'
+      : `De volta às projeções, exibindo ${f.titulo}.`;
+}
+
+export async function abrirApp(nome) {
+  if (!L.pronto) return 'O laboratório ainda não abriu.';
+  if (L.modoLab !== 'apps') modo('apps');
+  return L.mural.abrirPorNome(nome);
+}
+
+export function criarForma(tipo, cor) {
+  if (!L.pronto) return 'O laboratório ainda não abriu.';
+  if (L.modoLab !== 'criar') modo('criar');
+  return L.atelie.criar(tipo, cor);
+}
+
+export function desfazerCriacao() {
+  return L.atelie ? L.atelie.desfazer() : 'O ateliê ainda não abriu.';
+}
+
+export function limparCriacao() {
+  return L.atelie ? L.atelie.limpar() : 'O ateliê ainda não abriu.';
+}
+
+// foto da cena como está agora, com a câmera do Renato no canto, para o Jarvis "ver" o laboratório
+export function capturar() {
+  if (!L.aberto) return null;
+  if (L.economia) L.renderer.render(L.cena, L.camera);
+  else L.composer.render();
+  const tela = L.renderer.domElement;
+  const c = document.createElement('canvas');
+  c.width = 1024;
+  c.height = Math.round((1024 * tela.height) / tela.width);
+  const g = c.getContext('2d');
+  g.drawImage(tela, 0, 0, c.width, c.height);
+  if (L.video?.videoWidth) {
+    const w = 260;
+    const h = (w * L.video.videoHeight) / L.video.videoWidth;
+    g.save();
+    g.translate(c.width - 14, c.height - h - 14);
+    g.scale(-1, 1);
+    g.drawImage(L.video, 0, 0, w, h);
+    g.restore();
+    g.strokeStyle = '#4de8f0';
+    g.strokeRect(c.width - 14 - w, c.height - h - 14, w, h);
+  }
+  return c.toDataURL('image/jpeg', 0.82);
+}
+
+// o que está acontecendo no laboratório, em texto, para o Jarvis
+export function descrever() {
+  if (!L.aberto) return 'O laboratório holográfico está fechado.';
+  const f = L.formas[L.indice];
+  const partes = [`Laboratório holográfico aberto no modo ${NOME_MODO[L.modoLab]}, visual ${L.modo === 'real' ? 'foto real' : 'holograma'}.`];
+  if (L.modoLab === 'projecoes') partes.push(`Projeção: ${f.titulo}${L.explosao > 0.3 ? ' (desmontada em partículas)' : ''} — ${f.descricao}`);
+  if (L.modoLab === 'apps') partes.push(`Na frente: ${L.mural.resumo()}.`);
+  if (L.modoLab === 'criar') partes.push(`No ateliê: ${L.atelie.resumo()}. Ferramenta ${L.atelie.ferramenta()}.`);
+  const gesto = NOMES_GESTO[L.modoLab][L.duas ? 'dupla' : L.gesto];
+  partes.push(L.maos.length ? `O Renato está com ${L.maos.length === 2 ? 'as duas mãos' : 'uma mão'} na frente da câmera${gesto && gesto !== '—' ? `, gesto ${gesto.toLowerCase()}` : ''}.` : 'Nenhuma mão na frente da câmera agora.');
+  if (L.cursor.alvo) partes.push(`O cursor da mão está em cima de "${(L.cursor.alvo.title || L.cursor.alvo.textContent || '').trim().slice(0, 40)}".`);
+  if (L.diario.length) partes.push(`Últimas ações: ${L.diario.slice(-6).map((d) => d.texto).join('; ')}.`);
+  return partes.join(' ');
+}
+
+// registra uma ação da pessoa no laboratório e avisa o console (que repassa para o Jarvis)
+function avisar(texto) {
+  L.diario.push({ t: Date.now(), texto });
+  if (L.diario.length > 20) L.diario.shift();
+  L.aoEvento?.(texto);
 }
 
 export function estadoAtual() {
   const f = L.formas[L.indice];
-  return { aberto: L.aberto, forma: f?.titulo, formas: L.formas.map((x) => x.titulo), maos: L.maos.length, rastreamento: !!L.detector, visual: L.modo };
+  return { aberto: L.aberto, forma: f?.titulo, formas: CATALOGO.map((c) => c.titulo), maos: L.maos.length, rastreamento: !!L.detector, visual: L.modo, modo: L.modoLab };
 }
 
 
