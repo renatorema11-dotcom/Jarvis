@@ -6,7 +6,7 @@
 <title>J.A.R.V.I.S. — Console</title>
 <!-- three.js para o laboratório holográfico (holo.js), carregado só quando ele abre -->
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/", "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.16/build/index.module.js", "three-bvh-csg": "https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.18/build/index.module.js" } }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2358,6 +2358,12 @@ async function usarHolograma({ acao = 'abrir', forma = '', alvo = '' } = {}) {
 }
 
 async function acaoNoLab(acao, forma, alvo) {
+  if (acao === 'oficina' || acao === 'musica') return holo.modo(acao);
+  if (acao === 'selecionar') return holo.selecionarElemento(alvo || forma);
+  if (acao === 'soltar') return holo.soltarElemento();
+  if (acao === 'instrumento') return holo.tocarInstrumento(alvo || forma || 'piano');
+  if (acao === 'adicionar') return holo.adicionarPeca(alvo || forma);
+  if (acao === 'exportar') return holo.exportarPeca();
   if (acao === 'mostrar' || (forma && !['abrir_app', 'criar_forma'].includes(acao))) return holo.mostrar(forma || alvo);
   if (acao === 'desmontar') return holo.desmontar(true);
   if (acao === 'montar') return holo.desmontar(false);
@@ -2378,7 +2384,9 @@ async function acaoNoLab(acao, forma, alvo) {
   const e = holo.estadoAtual();
   return `Laboratório holográfico aberto no modo ${e.modo}, exibindo ${e.forma}. Projeções: ${e.formas.join(', ')}. `
     + 'Modos: projeções (punho gira, pinça dá zoom, mão aberta desmonta, deslizar troca), apps (aponta e faz pinça para abrir um programa do PC) '
-    + 'e criar (desenha no ar com o dedo e cria formas com a pinça). O dedo apontado vira um cursor que clica nos botões.';
+    + 'criar (desenha no ar com o dedo e cria formas com a pinça), oficina (projeta peças 3D com medidas em milímetros e exporta STL) '
+    + 'e música (piano, bateria, harpa de laser, teremim e trilha de cinema). Nas projeções, uma pinça num elemento foca nele com uma ficha; '
+    + 'ampliando aparecem mais elementos. O dedo apontado vira um cursor que clica nos botões.';
 }
 
 // o Jarvis olha a cena do laboratório (com a câmera do Renato no canto) e junta com o que ele sabe do estado
