@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#03070b">
+<title>Peça em realidade aumentada · J.A.R.V.I.S.</title>
+<meta name="description" content="Veja a peça projetada na oficina do Jarvis em 3D e em realidade aumentada, no tamanho real.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js" integrity="sha384-Ftcjj/GNLxPvzNDftO/oryXB9aGxsGZY9JGqsXG0uUKgQDl9RfDgsx9NJ/4IVNPe" crossorigin="anonymous"></script>
+<style>
+  :root{ --fundo:#03070b; --ciano:#4de8f0; --ciano-suave:#8ff3f7; --tinta:#e9f7f9; --fraco:#5f8791; --ambar:#ffa24c; }
+  *{ box-sizing:border-box; }
+  html, body{ margin:0; height:100%; background:var(--fundo); color:var(--tinta); font-family:'Rajdhani',system-ui,sans-serif; }
+  body{ display:flex; flex-direction:column; min-height:100dvh; background:radial-gradient(ellipse at 50% 30%, rgba(77,232,240,0.14), transparent 60%), var(--fundo); }
+  header{ padding:max(14px, env(safe-area-inset-top)) 16px 8px; display:flex; flex-direction:column; gap:2px; }
+  header small{ font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:3px; color:var(--ciano); }
+  header h1{ margin:0; font-family:'Orbitron',sans-serif; font-weight:900; font-size:clamp(20px, 6vw, 30px); letter-spacing:4px; text-shadow:0 0 18px rgba(77,232,240,0.55); overflow-wrap:anywhere; }
+  main{ position:relative; flex:1; min-height:60vh; }
+  model-viewer{ position:absolute; inset:0; width:100%; height:100%; --poster-color:transparent; background:transparent; }
+  .ar{ position:absolute; left:50%; bottom:max(18px, env(safe-area-inset-bottom)); transform:translateX(-50%); padding:14px 22px; border-radius:6px; border:1px solid var(--ciano);
+    background:var(--ciano); color:#01060a; font-family:'Share Tech Mono',monospace; font-size:14px; letter-spacing:2px; cursor:pointer; box-shadow:0 0 24px rgba(77,232,240,0.5); white-space:nowrap; }
+  .ar:focus-visible{ outline:2px solid var(--tinta); outline-offset:3px; }
+  .estado{ position:absolute; inset:0; display:grid; place-items:center; padding:24px; text-align:center; font-family:'Share Tech Mono',monospace; letter-spacing:2px; color:var(--ciano-suave); pointer-events:none; }
+  .estado.erro{ color:var(--ambar); }
+  .estado[hidden]{ display:none; }
+  footer{ padding:10px 16px max(12px, env(safe-area-inset-bottom)); font-size:15px; line-height:1.35; color:#a9c6cd; }
+  footer b{ color:var(--tinta); font-weight:600; }
+  @media (prefers-reduced-motion: reduce){ model-viewer{ --auto-rotate:0; } }
+</style>
+</head>
+<body>
+  <header>
+    <small>J.A.R.V.I.S. · OFICINA HOLOGRÁFICA</small>
+    <h1 id="nome">PEÇA</h1>
+  </header>
+  <main>
+    <model-viewer id="peca" alt="Peça projetada na oficina do Jarvis" ar ar-modes="webxr scene-viewer quick-look" ar-scale="fixed" ar-placement="floor"
+      camera-controls auto-rotate shadow-intensity="1" shadow-softness="0.8" exposure="1.05" environment-image="neutral" touch-action="pan-y">
+      <button class="ar" slot="ar-button" type="button">▣ VER NA MESA EM RA</button>
+    </model-viewer>
+    <p class="estado" id="estado">CARREGANDO A PEÇA…</p>
+  </main>
+  <footer>
+    <b>Gire com um dedo, aproxime com dois.</b> No botão de RA, aponte a câmera para a mesa: a peça aparece no tamanho real.
+    O link vale por 24 horas.
+  </footer>
+<script>
+  const parametros = new URLSearchParams(location.search);
+  const id = (parametros.get('id') || '').replace(/[^a-f0-9]/g, '').slice(0, 32);
+  const nome = (parametros.get('nome') || 'Peça').slice(0, 60);
+  document.getElementById('nome').textContent = nome.toUpperCase();
+  document.title = `${nome} em realidade aumentada · J.A.R.V.I.S.`;
+  const visor = document.getElementById('peca');
+  const estado = document.getElementById('estado');
+  if (!id) {
+    estado.textContent = 'LINK INCOMPLETO: GERE UM QR CODE NOVO NA OFICINA.';
+    estado.classList.add('erro');
+  } else {
+    visor.src = `https://n8n.nutriali.cloud/webhook/jarvis/ra-arquivo?id=${id}`;
+    visor.addEventListener('load', () => { estado.hidden = true; });
+    visor.addEventListener('error', () => {
+      estado.textContent = 'ESTE LINK EXPIROU (VALE 24 HORAS). GERE UM QR CODE NOVO NA OFICINA.';
+      estado.classList.add('erro');
+      estado.hidden = false;
+    });
+  }
+</script>
+</body>
+</html>

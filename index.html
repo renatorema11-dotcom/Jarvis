@@ -2268,6 +2268,7 @@ async function abrirHolo() {
       aoTrocarVisual: (modo) => trocarVisual(modo, { noLab: false }),
       aoEvento: eventoDoLab,
       apps: { listar: listarAppsPc, abrir: abrirAppPc },
+      servicos: servicosDaOficina,
     });
     registrarAtividade('Laboratório holográfico aberto', 'ok');
     return estado;
@@ -2289,6 +2290,21 @@ function fecharHolo() {
   if (location.hash === '#holo') history.replaceState(null, '', location.pathname + location.search);
   registrarAtividade('De volta ao console', 'ok');
 }
+
+// a oficina do laboratório pede ao cérebro (n8n): frase ou foto → peça, e o arquivo da peça para o celular (RA)
+const SITE_PUBLICO = 'https://jarvis-tau-one-39.vercel.app';
+const servicosDaOficina = {
+  async projetar({ pedido, modelo, imagem }) {
+    if (!config.chave) throw new Error('falta a chave do cérebro');
+    return chamarN8n('jarvis/cad', { method: 'POST', body: { pedido, modelo, imagem } });
+  },
+  async publicarRA({ glb, nome }) {
+    if (!config.chave) throw new Error('falta a chave do cérebro');
+    const r = await chamarN8n('jarvis/ra', { method: 'POST', body: { glb, nome } });
+    if (!r?.ok || !r.id) throw new Error(r?.erro || 'o cérebro não guardou o arquivo');
+    return { url: `${SITE_PUBLICO}/ra.html?id=${encodeURIComponent(r.id)}&nome=${encodeURIComponent(nome || 'Peça')}` };
+  },
+};
 
 // apps do PC para o mural do laboratório (o Jarvis PC lista o menu Iniciar com os ícones)
 async function listarAppsPc() {
@@ -2363,7 +2379,31 @@ async function acaoNoLab(acao, forma, alvo) {
   if (acao === 'soltar') return holo.soltarElemento();
   if (acao === 'instrumento') return holo.tocarInstrumento(alvo || forma || 'piano');
   if (acao === 'adicionar') return holo.adicionarPeca(alvo || forma);
-  if (acao === 'exportar') return holo.exportarPeca();
+  if (acao === 'exportar') return holo.exportarPeca((['stl', 'obj', 'glb'].find((f) => normalizarTexto(alvo).includes(f))) || 'stl');
+  // oficina estilo Inventor: projetar pela voz, foto, celular (RA), apresentação, desenho, material, corte, montagem…
+  const texto = normalizarTexto(alvo || forma);
+  if (acao === 'projetar') return holo.oficina('projetar', { texto: alvo || forma });
+  if (acao === 'foto_peca') return holo.oficina('foto', { texto: alvo });
+  if (acao === 'celular') return holo.oficina('celular');
+  if (acao === 'apresentar') {
+    // a apresentação dura uns 18 segundos: responde já e deixa rodando
+    holo.oficina('apresentar', { gravar: /grav|video/.test(texto) }).then((r) => eventoDoLab(`apresentação terminou: ${r}`)).catch(() => {});
+    return /grav|video/.test(texto) ? 'Começando a apresentação de cinema, gravando o vídeo.' : 'Começando a apresentação de cinema.';
+  }
+  if (acao === 'desenho') return holo.oficina('desenho');
+  if (acao === 'material') return holo.oficina('material', { texto: alvo || forma });
+  if (acao === 'corte') return holo.oficina('corte', { ligar: !/deslig|tira|fecha|sem/.test(texto) });
+  if (acao === 'explodir') return holo.oficina('explodir', { ligar: !/fech|junta|monta|deslig/.test(texto) });
+  if (acao === 'biblioteca') {
+    const tipo = ['parafuso', 'porca', 'arruela', 'rolamento', 'perfil'].find((t) => texto.includes(t)) || 'parafuso';
+    const tamanho = (texto.match(/m\s?(3|4|5|6|8|10|12)\b/) || [])[1];
+    const rol = (texto.match(/\b(608|6000|6200|6201|6202)\b/) || [])[1];
+    const comp = (texto.match(/(?:x|por|de)\s*(\d{1,4})\s*(?:mm)?\b/) || [])[1];
+    return holo.oficina('biblioteca', { tipo, tamanho: rol || (tamanho ? `M${tamanho}` : undefined), comprimento: comp });
+  }
+  if (acao === 'vista') return holo.oficina('vista', { texto: ['frente', 'tras', 'topo', 'base', 'direita', 'esquerda', 'iso'].find((v) => texto.includes(v)) || 'iso' });
+  if (acao === 'luva') return holo.luva(alvo || forma || 'holograma');
+  if (acao === 'exemplo_peca') return holo.oficina('exemplo');
   if (acao === 'mostrar' || (forma && !['abrir_app', 'criar_forma'].includes(acao))) return holo.mostrar(forma || alvo);
   if (acao === 'desmontar') return holo.desmontar(true);
   if (acao === 'montar') return holo.desmontar(false);
@@ -2384,7 +2424,7 @@ async function acaoNoLab(acao, forma, alvo) {
   const e = holo.estadoAtual();
   return `Laboratório holográfico aberto no modo ${e.modo}, exibindo ${e.forma}. Projeções: ${e.formas.join(', ')}. `
     + 'Modos: projeções (punho gira, pinça dá zoom, mão aberta desmonta, deslizar troca), apps (aponta e faz pinça para abrir um programa do PC) '
-    + 'criar (desenha no ar com o dedo e cria formas com a pinça), oficina (projeta peças 3D com medidas em milímetros e exporta STL) '
+    + 'criar (desenha no ar com o dedo e cria formas com a pinça), oficina (CAD como o Inventor: esboço, extrusão, furos roscados, arredondar, padrões, montagem com parafusos e rolamentos, desenho técnico A4, corte, esforço, peça pela voz ou pela foto, celular em realidade aumentada e apresentação de cinema) '
     + 'e música (piano, bateria, harpa de laser, teremim e trilha de cinema). Nas projeções, uma pinça num elemento foca nele com uma ficha; '
     + 'ampliando aparecem mais elementos. O dedo apontado vira um cursor que clica nos botões.';
 }

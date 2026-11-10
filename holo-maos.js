@@ -6,20 +6,27 @@
  * quadro e outro, e os gestos são lidos em 3D pelos pontos "do mundo" do MediaPipe (em metros),
  * com histerese: a pinça fecha num ponto e só abre bem depois, então não fica piscando.
  *
- * Visual: em vez de linhas, uma mão holográfica com volume — ossos em cápsulas de vidro com
- * borda acesa, articulações e pontas dos dedos brilhando, palma em malha hexagonal e um anel de
- * HUD girando no centro da mão, na cor do gesto.
+ * Além dos gestos básicos (pinça, apontar, punho, mão aberta), lê:
+ *  - joinha e joinha para baixo (confirmar e desfazer, disparados uma vez depois de segurar);
+ *  - tesoura: indicador e médio em V, e o V fechando vira um "corte";
+ *  - palma para cima, o giro do pulso na tela e a orientação 3D da mão (para girar peças);
+ *  - o tamanho da mão e a abertura polegar–indicador em centímetros.
+ *
+ * O visual da mão (a luva) fica em holo-luva.js.
  */
 import * as THREE from 'three';
-import { brilho } from './cena.js';
 
 export const LIGACOES_MAO = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
   [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
 export const PONTAS = [4, 8, 12, 16, 20];
-export const CORES_GESTO = { punho: '#ffa24c', pinca: '#5dfca0', aberta: '#4de8f0', aponta: '#b794ff', nenhum: '#8ff3f7' };
-const NOMES = { punho: 'PUNHO', pinca: 'PINÇA', aberta: 'ABERTA', aponta: 'APONTANDO', nenhum: 'RELAXADA' };
-// espessura de cada osso (palma mais grossa, dedos afinando até a ponta)
-const GROSSURA = [1.25, 1.05, 0.9, 0.75, 1.25, 1, 0.85, 0.7, 1.15, 1, 0.85, 0.7, 1.15, 0.95, 0.8, 0.68, 1.15, 1.25, 0.85, 0.72, 0.62];
+export const CORES_GESTO = {
+  punho: '#ffa24c', pinca: '#5dfca0', aberta: '#4de8f0', aponta: '#b794ff', nenhum: '#8ff3f7',
+  joinha: '#5dfca0', joinha_baixo: '#ff6b6b', tesoura: '#ffd84d',
+};
+const NOMES = {
+  punho: 'PUNHO', pinca: 'PINÇA', aberta: 'ABERTA', aponta: 'APONTANDO', nenhum: 'RELAXADA',
+  joinha: 'JOINHA', joinha_baixo: 'JOINHA P/ BAIXO', tesoura: 'TESOURA',
+};
 
 // ---------------- filtro One Euro ----------------
 class UmEuro {
@@ -62,12 +69,33 @@ function lerGesto(P, pinchAntes) {
   const razao = dist(P[4], P[8]) / palma;
   const indicadorLonge = dist(P[0], P[8]) > palma * 0.95;
   const pinca = indicadorLonge && (pinchAntes ? razao < 0.48 : razao < 0.32);
+  // polegar em pé (joinha) ou para baixo: os outros dedos fechados e o polegar esticado na vertical
+  const vPolegar = sub(P[2], P[4]);
+  const vertical = vPolegar[1] / tam(vPolegar);   // y para baixo, como na imagem
+  const polegarFora = dist(P[4], P[5]) > palma * 0.5 && cos(sub(P[2], P[3]), sub(P[3], P[4])) > 0.6;
   let gesto = 'nenhum';
   if (pinca) gesto = 'pinca';
+  else if (esticados === 0 && polegarFora && vertical < -0.7) gesto = 'joinha';
+  else if (esticados === 0 && polegarFora && vertical > 0.7) gesto = 'joinha_baixo';
+  else if (dedos.indicador && dedos.medio && !dedos.anelar && !dedos.minimo) gesto = 'tesoura';
   else if (dedos.indicador && esticados === 1) gesto = 'aponta';
   else if (esticados === 0) gesto = 'punho';
   else if (esticados >= 3) gesto = 'aberta';
-  return { gesto, pinca, dedos, razao };
+  return { gesto, pinca, dedos, razao, esticados, aberturaV: dist(P[8], P[12]) / palma };
+}
+
+// orientação da mão (base ortonormal: X do mínimo ao indicador, Y do pulso ao dedo médio)
+const eixoX = new THREE.Vector3();
+const eixoY = new THREE.Vector3();
+const eixoZ = new THREE.Vector3();
+const base = new THREE.Matrix4();
+function orientacao(W, alvo) {
+  eixoY.set(W[9].x - W[0].x, W[9].y - W[0].y, (W[9].z || 0) - (W[0].z || 0)).normalize();
+  eixoX.set(W[5].x - W[17].x, W[5].y - W[17].y, (W[5].z || 0) - (W[17].z || 0));
+  eixoX.addScaledVector(eixoY, -eixoX.dot(eixoY)).normalize();
+  eixoZ.crossVectors(eixoX, eixoY);
+  base.makeBasis(eixoX, eixoY, eixoZ);
+  return alvo.setFromRotationMatrix(base);
 }
 
 // ---------------- rastreio com filtro e identidade de cada mão ----------------
@@ -86,212 +114,89 @@ export function criarRastreio() {
         let lado = lados[i]?.[0]?.categoryName === 'Left' ? 'direita' : lados[i]?.[0]?.categoryName === 'Right' ? 'esquerda' : `mao${i}`;
         if (vistos.has(lado)) lado = `${lado}${i}`;
         vistos.add(lado);
-        const estado = porLado[lado] ||= { filtros: filtros(), gesto: 'nenhum', bruto: 'nenhum', contagem: 0, pinca: false, visto: 0 };
-        if (agora - estado.visto > 400) estado.filtros = filtros();   // a mão sumiu e voltou: recomeça o filtro
+        const estado = porLado[lado] ||= {
+          filtros: filtros(), gesto: 'nenhum', bruto: 'nenhum', contagem: 0, pinca: false, visto: 0,
+          desde: 0, disparado: false, vAbertoEm: 0, corteEm: 0, tamanhoCm: 0, pincaCm: 0, palmaCimaDesde: 0,
+        };
+        if (agora - estado.visto > 400) {
+          // a mão sumiu e voltou: recomeça o filtro
+          estado.filtros = filtros();
+          estado.tamanhoCm = 0;
+        }
         estado.visto = agora;
         const suave = pts.map((p, k) => ({
           x: estado.filtros[k][0].filtrar(p.x, agora),
           y: estado.filtros[k][1].filtrar(p.y, agora),
           z: estado.filtros[k][2].filtrar(p.z || 0, agora),
         }));
-        const leitura = lerGesto(mundo[i]?.length === 21 ? mundo[i] : suave, estado.pinca);
+        const W = mundo[i]?.length === 21 ? mundo[i] : null;
+        const leitura = lerGesto(W || suave, estado.pinca);
         estado.pinca = leitura.pinca;
         // a pinça vale em 2 quadros; os outros gestos em 3, para não trocar sem querer
         estado.contagem = leitura.gesto === estado.bruto ? estado.contagem + 1 : 1;
         estado.bruto = leitura.gesto;
-        if (estado.contagem >= (leitura.gesto === 'pinca' ? 2 : 3)) estado.gesto = leitura.gesto;
+        if (estado.contagem >= (leitura.gesto === 'pinca' ? 2 : 3) && estado.gesto !== leitura.gesto) {
+          estado.gesto = leitura.gesto;
+          estado.desde = agora;
+          estado.disparado = false;
+        }
+        // joinha confirma e joinha para baixo desfaz, uma vez só, depois de segurar um instante
+        let evento = null;
+        if (!estado.disparado && agora - estado.desde > 300) {
+          if (estado.gesto === 'joinha') evento = 'confirmar';
+          if (estado.gesto === 'joinha_baixo') evento = 'desfazer';
+          if (evento) estado.disparado = true;
+        }
+        // tesoura: o V aberto que fecha rápido vira um corte
+        if (leitura.gesto === 'tesoura' || estado.gesto === 'tesoura') {
+          if (leitura.aberturaV > 0.42) estado.vAbertoEm = agora;
+          if (leitura.aberturaV < 0.2 && agora - estado.vAbertoEm < 700 && agora - estado.corteEm > 900) {
+            estado.corteEm = agora;
+            estado.vAbertoEm = 0;
+            evento = 'corte';
+          }
+        }
+        // medidas reais (aproximadas) pelos pontos do mundo, em centímetros
+        let normal = null;
+        let quat = null;
+        let palmaCima = false;
+        if (W) {
+          const comprimento = (dist(W[0], W[9]) + dist(W[9], W[10]) + dist(W[10], W[11]) + dist(W[11], W[12])) * 100;
+          estado.tamanhoCm = estado.tamanhoCm ? estado.tamanhoCm + (comprimento - estado.tamanhoCm) * 0.05 : comprimento;
+          const abertura = dist(W[4], W[8]) * 100;
+          estado.pincaCm = estado.pincaCm ? estado.pincaCm + (abertura - estado.pincaCm) * 0.35 : abertura;
+          // normal da palma (para o lado de dentro da mão), em coordenadas da imagem (y para baixo)
+          const a = sub(W[0], W[5]);
+          const b = sub(W[0], W[17]);
+          const n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+          const s = (lado.startsWith('esquerda') ? -1 : 1) / tam(n);
+          normal = { x: n[0] * s, y: n[1] * s, z: n[2] * s };
+          quat = orientacao(W, new THREE.Quaternion());
+          if (leitura.esticados >= 3 && normal.y < -0.55) {
+            estado.palmaCimaDesde ||= agora;
+            palmaCima = agora - estado.palmaCimaDesde > 250;
+          } else {
+            estado.palmaCimaDesde = 0;
+          }
+        }
         const d2 = (a, b) => Math.hypot(suave[a].x - suave[b].x, suave[a].y - suave[b].y);
-        const centro = [0, 5, 9, 13, 17].reduce((s, k) => ({ x: s.x + suave[k].x / 5, y: s.y + suave[k].y / 5 }), { x: 0, y: 0 });
+        const centro = [0, 5, 9, 13, 17].reduce((acc, k) => ({ x: acc.x + suave[k].x / 5, y: acc.y + suave[k].y / 5 }), { x: 0, y: 0 });
         return {
           lado, gesto: estado.gesto, gestoBruto: leitura.gesto, dedos: leitura.dedos, razaoPinca: leitura.razao,
           pts: suave, centro, palma: d2(0, 9) || 1e-3,
           pontaPinca: { x: (suave[4].x + suave[8].x) / 2, y: (suave[4].y + suave[8].y) / 2 },
+          pontaV: { x: (suave[8].x + suave[12].x) / 2, y: (suave[8].y + suave[12].y) / 2 },
           confianca: lados[i]?.[0]?.score ?? 1,
+          evento, normal, quat, palmaCima,
+          // giro do pulso na tela (radianos), do pulso até a base do dedo médio
+          giro: Math.atan2(suave[9].y - suave[0].y, suave[0].x - suave[9].x),
+          tamanhoCm: estado.tamanhoCm, pincaCm: estado.pincaCm,
         };
       });
       // a mão principal é a direita, quando aparece
       maos.sort((a, b) => (a.lado === 'direita' ? -1 : 0) - (b.lado === 'direita' ? -1 : 0));
       return maos;
     },
-  };
-}
-
-// ---------------- mão holográfica ----------------
-function materialHolo(intensidade) {
-  return new THREE.ShaderMaterial({
-    uniforms: { uCor: { value: new THREE.Color('#4de8f0') }, uTempo: { value: 0 }, uForca: { value: intensidade } },
-    vertexShader: `
-      varying vec3 vN;
-      varying vec3 vV;
-      varying float vAltura;
-      void main() {
-        vec4 p = instanceMatrix * vec4(position, 1.0);
-        vec4 mv = modelViewMatrix * p;
-        vN = normalize(normalMatrix * mat3(instanceMatrix) * normal);
-        vV = normalize(-mv.xyz);
-        vAltura = mv.y;
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: `
-      uniform vec3 uCor;
-      uniform float uTempo, uForca;
-      varying vec3 vN;
-      varying vec3 vV;
-      varying float vAltura;
-      void main() {
-        float borda = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.0);
-        float faixas = 0.78 + 0.22 * sin(vAltura * 55.0 - uTempo * 7.0);
-        vec3 cor = uCor * (0.18 + borda * 1.5) * faixas * uForca;
-        gl_FragColor = vec4(cor, 0.25 + borda * 0.75);
-      }`,
-    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
-  });
-}
-
-function materialPalma() {
-  return new THREE.ShaderMaterial({
-    uniforms: { uCor: { value: new THREE.Color('#4de8f0') }, uTempo: { value: 0 }, uEscala: { value: 30 } },
-    vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `
-      uniform vec3 uCor;
-      uniform float uTempo, uEscala;
-      varying vec2 vP;
-      // distância até a borda de uma colmeia hexagonal
-      float hex(vec2 p) {
-        p *= uEscala;
-        vec2 r = vec2(1.0, 1.7320508);
-        vec2 h = r * 0.5;
-        vec2 a = mod(p, r) - h;
-        vec2 b = mod(p - h, r) - h;
-        vec2 g = dot(a, a) < dot(b, b) ? a : b;
-        vec2 q = abs(g);
-        return 0.5 - max(dot(q, normalize(vec2(1.0, 1.7320508))), q.x);
-      }
-      void main() {
-        float linha = smoothstep(0.06, 0.0, hex(vP));
-        float onda = 0.6 + 0.4 * sin(length(vP) * 40.0 - uTempo * 4.0);
-        float a = 0.05 + linha * 0.35 * onda;
-        gl_FragColor = vec4(uCor * a * 1.6, a);
-      }`,
-    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
-  });
-}
-
-function arco(raio, largura, inicio, tamanho) {
-  return new THREE.RingGeometry(raio, raio + largura, 48, 1, inicio, tamanho);
-}
-
-export function criarMaoHolografica() {
-  const grupo = new THREE.Group();
-  grupo.visible = false;
-  grupo.renderOrder = 10;
-  const matOsso = materialHolo(1);
-  const matJunta = materialHolo(1.5);
-  const ossos = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 14, 1, true), matOsso, LIGACOES_MAO.length);
-  const juntas = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 18, 12), matJunta, 21);
-  ossos.frustumCulled = juntas.frustumCulled = false;
-  const pontas = PONTAS.map(() => brilho(new THREE.Color('#8ff3f7'), 0.2));
-  const geoPalma = new THREE.BufferGeometry();
-  geoPalma.setAttribute('position', new THREE.BufferAttribute(new Float32Array(7 * 3), 3));
-  geoPalma.setIndex([0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5, 0, 5, 6, 0, 6, 1]);
-  const matPalma = materialPalma();
-  const palma = new THREE.Mesh(geoPalma, matPalma);
-  palma.frustumCulled = false;
-  const contorno = new THREE.LineLoop(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(6 * 3), 3)),
-    new THREE.LineBasicMaterial({ color: '#4de8f0', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
-  contorno.frustumCulled = false;
-  // anel de HUD no centro da mão: três arcos girando em sentidos diferentes
-  const hud = new THREE.Group();
-  const matHud = new THREE.MeshBasicMaterial({ color: '#4de8f0', transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
-  const aneis = [
-    new THREE.Mesh(arco(1, 0.06, 0, Math.PI * 1.3), matHud),
-    new THREE.Mesh(arco(1.18, 0.03, 0.4, Math.PI * 0.7), matHud),
-    new THREE.Mesh(arco(1.18, 0.03, Math.PI * 1.25, Math.PI * 0.55), matHud),
-    new THREE.Mesh(arco(0.82, 0.02, 0, Math.PI * 2), matHud),
-  ];
-  hud.add(...aneis);
-  // marcador da pinça entre o polegar e o indicador
-  const pincaAnel = new THREE.Mesh(arco(1, 0.12, 0, Math.PI * 2), matHud.clone());
-  const pincaPonto = brilho(new THREE.Color('#5dfca0'), 0.35);
-  grupo.add(palma, contorno, ossos, juntas, ...pontas, hud, pincaAnel, pincaPonto);
-
-  const P = Array.from({ length: 21 }, () => new THREE.Vector3());
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const s = new THREE.Vector3();
-  const meio = new THREE.Vector3();
-  const dir = new THREE.Vector3();
-  const cima = new THREE.Vector3(0, 1, 0);
-  const cor = new THREE.Color();
-  let pulsoPinca = 0;
-
-  return {
-    grupo,
-    // mapear(ponto normalizado) -> posição no espaço da câmera
-    atualizar(mao, mapear, t, real = false) {
-      grupo.visible = !!mao;
-      if (!mao) return;
-      mao.pts.forEach((pt, k) => P[k].copy(mapear(pt)));
-      const base = P[0].distanceTo(P[9]) * 0.085;
-      cor.set(CORES_GESTO[mao.gesto] || CORES_GESTO.nenhum);
-      if (real) cor.lerp(new THREE.Color('#e8f6ff'), 0.45);
-      for (const mat of [matOsso, matJunta, matPalma]) {
-        mat.uniforms.uCor.value.copy(cor);
-        mat.uniforms.uTempo.value = t;
-      }
-      matPalma.uniforms.uEscala.value = 2.2 / Math.max(0.05, P[0].distanceTo(P[9]));
-      matHud.color.copy(cor);
-      contorno.material.color.copy(cor);
-      LIGACOES_MAO.forEach(([a, b], k) => {
-        dir.subVectors(P[b], P[a]);
-        const comprimento = dir.length() || 1e-4;
-        meio.addVectors(P[a], P[b]).multiplyScalar(0.5);
-        q.setFromUnitVectors(cima, dir.divideScalar(comprimento));
-        const r = base * GROSSURA[k];
-        m.compose(meio, q, s.set(r, comprimento, r));
-        ossos.setMatrixAt(k, m);
-      });
-      ossos.instanceMatrix.needsUpdate = true;
-      P.forEach((p, k) => {
-        const ponta = PONTAS.includes(k);
-        const r = base * (ponta ? 1.15 : k === 0 ? 1.6 : 1.25) * (GROSSURA[Math.max(0, k - 1)] * 0.3 + 0.75);
-        m.compose(p, q.identity(), s.setScalar(r));
-        juntas.setMatrixAt(k, m);
-      });
-      juntas.instanceMatrix.needsUpdate = true;
-      PONTAS.forEach((k, i) => {
-        pontas[i].position.copy(P[k]);
-        pontas[i].material.color.copy(cor);
-        pontas[i].scale.setScalar(base * (mao.gesto === 'aponta' && k === 8 ? 7 : 4.2));
-      });
-      // palma: centro e os cinco pontos da base dos dedos e do pulso
-      const ids = [0, 1, 5, 9, 13, 17];
-      const centro = ids.reduce((acc, k) => acc.add(P[k]), new THREE.Vector3()).divideScalar(ids.length);
-      const posPalma = geoPalma.attributes.position;
-      posPalma.setXYZ(0, centro.x, centro.y, centro.z);
-      ids.forEach((k, i) => posPalma.setXYZ(i + 1, P[k].x, P[k].y, P[k].z));
-      posPalma.needsUpdate = true;
-      const posContorno = contorno.geometry.attributes.position;
-      ids.forEach((k, i) => posContorno.setXYZ(i, P[k].x, P[k].y, P[k].z));
-      posContorno.needsUpdate = true;
-      hud.position.copy(centro);
-      hud.scale.setScalar(P[0].distanceTo(P[9]) * 0.42);
-      aneis[0].rotation.z = t * 1.6;
-      aneis[1].rotation.z = -t * 2.3;
-      aneis[2].rotation.z = -t * 2.3;
-      aneis[3].scale.setScalar(1 + Math.sin(t * 3) * 0.04);
-      // pinça: anel fechando e ponto aceso entre os dedos
-      const pinca = mao.gesto === 'pinca';
-      pulsoPinca = THREE.MathUtils.lerp(pulsoPinca, pinca ? 1 : 0, 0.3);
-      pincaAnel.visible = pincaPonto.visible = pulsoPinca > 0.03;
-      meio.addVectors(P[4], P[8]).multiplyScalar(0.5);
-      pincaAnel.position.copy(meio);
-      pincaPonto.position.copy(meio);
-      pincaAnel.scale.setScalar(base * (2.6 - pulsoPinca * 0.9 + Math.sin(t * 9) * 0.15));
-      pincaAnel.material.opacity = 0.9 * pulsoPinca;
-      pincaPonto.scale.setScalar(base * 6 * pulsoPinca);
-    },
-    centroTela: (mapearTela, mao) => mapearTela(mao.pts[0]),
   };
 }
 

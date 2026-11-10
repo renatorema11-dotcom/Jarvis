@@ -39,7 +39,8 @@ import { criarReal } from './holo-real.js';
 import { formaLua, formaSistemaSolar, formaGalaxia, formaBuracoNegro, formaTurbina, formaDrone, formaMolecula, formaCoracao, formaTerreno } from './holo-formas.js';
 import { criarMuralApps } from './holo-apps.js';
 import { criarAtelie } from './holo-criar.js';
-import { criarRastreio, criarMaoHolografica, CORES_GESTO, PONTAS, nomeGesto } from './holo-maos.js';
+import { criarRastreio, CORES_GESTO, PONTAS, nomeGesto } from './holo-maos.js';
+import { criarLuva, criarOndas, ESTILOS_LUVA, ORDEM_ESTILOS } from './holo-luva.js';
 import { criarElementos } from './holo-elementos.js';
 import { criarOficina } from './holo-cad.js';
 import { criarMusica, INSTRUMENTOS } from './holo-musica.js';
@@ -58,14 +59,14 @@ const NOMES_GESTO = {
   projecoes: { punho: 'PUNHO · GIRAR', pinca: 'PINÇA · ZOOM', aberta: 'MÃO ABERTA · DESMONTAR', aponta: 'DEDO · TOCAR', dupla: 'DUAS MÃOS · ESCALA', nenhum: '—' },
   apps: { punho: 'PUNHO', pinca: 'PINÇA · ABRIR', aberta: 'MÃO ABERTA · PÁGINA', aponta: 'DEDO · MIRAR', dupla: 'DUAS MÃOS', nenhum: '—' },
   criar: { punho: 'PUNHO · GIRAR', pinca: 'PINÇA · CRIAR / PEGAR', aberta: 'MÃO ABERTA', aponta: 'DEDO · DESENHAR', dupla: 'DUAS MÃOS · ESCALA', nenhum: '—' },
-  oficina: { punho: 'PUNHO · GIRAR A VISTA', pinca: 'PINÇA · DESENHAR / MOVER', aberta: 'MÃO ABERTA', aponta: 'DEDO · MIRAR', dupla: 'DUAS MÃOS · ZOOM', nenhum: '—' },
+  oficina: { punho: 'PUNHO · PEGAR E GIRAR', pinca: 'PINÇA · DESENHAR / PUXAR', aberta: 'MÃO ABERTA', aponta: 'DEDO · MIRAR / TOCAR', dupla: 'DUAS MÃOS · ZOOM', nenhum: '—', joinha: 'JOINHA · CONFIRMAR', joinha_baixo: 'JOINHA P/ BAIXO · DESFAZER', tesoura: 'TESOURA · CORTAR' },
   musica: { punho: 'PUNHO', pinca: 'PINÇA', aberta: 'MÃO ABERTA · TOCANDO', aponta: 'DEDO · TOCANDO', dupla: 'DUAS MÃOS', nenhum: 'TOCANDO' },
 };
 const GUIAS = {
   projecoes: [['punho', '✊ PUNHO · GIRAR'], ['pinca', '🤏 PINÇA · ZOOM'], ['aberta', '🖐 ABERTA · DESMONTAR'], ['aponta', '☝ DEDO · TOCAR / MIRAR'], ['dupla', '👐 DUAS MÃOS · ESCALA'], ['deslize', '↔ DESLIZAR · TROCAR']],
   apps: [['aponta', '☝ DEDO · MIRAR'], ['pinca', '🤏 PINÇA · ABRIR'], ['segurar', '⏱ SEGURAR PARADO · ABRIR'], ['deslize', '↔ MÃO ABERTA · PÁGINA']],
   criar: [['aponta', '☝ DEDO · DESENHAR'], ['pinca', '🤏 PINÇA · CRIAR / PEGAR'], ['punho', '✊ PUNHO · GIRAR'], ['dupla', '👐 DUAS MÃOS · ESCALA']],
-  oficina: [['pinca', '🤏 PINÇA NA MESA · DESENHAR'], ['aponta', '☝ DEDO · MIRAR NO PAINEL'], ['punho', '✊ PUNHO · GIRAR A VISTA'], ['dupla', '👐 DUAS MÃOS · ZOOM']],
+  oficina: [['pinca', '🤏 PINÇA · DESENHAR / PUXAR'], ['joinha', '👍 CONFIRMA · 👎 DESFAZ'], ['tesoura', '✌ TESOURA · CORTA'], ['punho', '✊ PUNHO NA PEÇA · GIRA'], ['menu', '🖐 PALMA ESQ. P/ CIMA · MENU'], ['dupla', '🤏🤏 DUAS PINÇAS · MEDEM']],
   musica: [['aponta', '☝ DEDOS · TOCAR'], ['aberta', '🖐 MÃO · BATER'], ['nenhum', '↕ ALTURA · NOTA (TEREMIM)']],
 };
 const NOME_MODO = { projecoes: 'projeções', apps: 'apps', criar: 'criar', oficina: 'oficina', musica: 'música' };
@@ -1060,6 +1061,7 @@ function montarHud(raiz) {
       <div class="holo-espaco"></div>
       <div class="holo-relogio" data-h="relogio"></div>
       <button class="holo-btn" type="button" data-mira data-h="som" aria-label="Ligar ou desligar o som">SOM</button>
+      <button class="holo-btn" type="button" data-mira data-h="luva" aria-label="Trocar o estilo da luva" title="Estilo da luva"></button>
       <button class="holo-btn" type="button" data-mira data-h="visual"></button>
       <button class="holo-btn" type="button" data-mira data-h="voltar">◂ <span class="holo-longo">VOLTAR AO </span>CONSOLE</button>
     </div>
@@ -1104,6 +1106,11 @@ function montarHud(raiz) {
     else L.som.desligarZumbido();
   });
   h.som.classList.toggle('quieto', !L.som.ligado);
+  h.luva.addEventListener('click', () => {
+    L.som.clique();
+    const atual = L.maosVisuais[0]?.estilo || 'holo';
+    luva(ORDEM_ESTILOS[(ORDEM_ESTILOS.indexOf(atual) + 1) % ORDEM_ESTILOS.length]);
+  });
   h.desmontar.addEventListener('click', () => desmontar(!L.desmontadoPorComando));
   h.centralizar.addEventListener('click', centralizar);
   h.modos.addEventListener('click', (e) => {
@@ -1170,7 +1177,7 @@ function atualizarHud() {
     ['VISUAL', L.modo === 'real' ? 'FOTO REAL' : 'HOLOGRAMA'],
     ['QUALIDADE', L.economia ? 'ECONÔMICA' : 'MÁXIMA'],
   ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-  h.gesto.textContent = NOMES_GESTO[L.modoLab][L.duas ? 'dupla' : L.gesto] || '—';
+  h.gesto.textContent = NOMES_GESTO[L.modoLab][L.duas ? 'dupla' : L.gesto] || nomeGesto(L.gesto);
   for (const s of h.guia.children) {
     s.classList.toggle('ativo', s.dataset.g === (L.duas ? 'dupla' : L.gesto) || (s.dataset.g === 'deslize' && performance.now() - L.trocaEm < 700)
       || (s.dataset.g === 'segurar' && L.cursor.carga > 0.05));
@@ -1237,7 +1244,7 @@ function atualizarRotulos() {
 
 function mostrarTitulo(f) {
   const textos = {
-    oficina: ['PROJETO · PEÇA 3D EM MILÍMETROS', 'OFICINA', 'Escolha uma ferramenta e faça pinça na mesa: arrastar define o tamanho, com encaixe em milímetros. Ajuste as medidas no painel. Furo e rasgo tiram material da peça. Punho gira a vista e duas mãos dão zoom.'],
+    oficina: ['CAD PARAMÉTRICO · MILÍMETROS', 'OFICINA', 'Como no Inventor: esboço 2D, extrusão, revolução, furos, arredondar, padrões, montagem, desenho técnico e inspeção, com as mãos, o mouse ou a voz.'],
     musica: ['PALCO HOLOGRÁFICO · INSTRUMENTOS', 'MÚSICA', 'Escolha um instrumento à esquerda e toque com os dedos: piano, bateria, harpa de laser, teremim e sons de trilha de cinema.'],
   }[L.modoLab];
   const [codigo, titulo, descricao] = textos || (L.modoLab === 'criar'
@@ -1393,7 +1400,12 @@ function processarMaos(agora) {
   const m = novas[0];
   const antes = anteriores.find((x) => x.lado === m?.lado) || anteriores[0];
   const tocando = L.modoLab === 'musica';
-  atualizarCursorMao(novas.length === 2 && !tocando ? null : m, antes, agora);
+  const menuOficina = L.modoLab === 'oficina' && L.oficina.menuAberto();
+  atualizarCursorMao(novas.length === 2 && !tocando && !menuOficina ? null : m, antes, agora);
+  if (L.modoLab === 'oficina') {
+    maosNaOficina(novas, m, agora);
+    return;
+  }
   if (tocando) {
     L.gesto = m ? m.gesto : 'nenhum';
     tocarComAsMaos(novas, agora);
@@ -1465,15 +1477,6 @@ function processarMaos(agora) {
     if (p) L.atelie.entrada(m.gesto, p);
     return;
   }
-  if (naOficina) {
-    if (L.cursor.alvo || !L.cursor.mao) {
-      L.oficina.soltar();
-      return;
-    }
-    raio.setFromCamera(ndcDaTela(L.cursor.x, L.cursor.y), L.camera);
-    L.oficina.entrada(m.gesto, raio.ray.clone());
-    return;
-  }
   const foco = L.elementos.foco();
   if (m.gesto === 'aponta' && !L.cursor.alvo) {
     const ponta = pontoNoMundo(m.pts[8]);
@@ -1510,6 +1513,34 @@ function processarMaos(agora) {
   }
 }
 
+// na oficina: duas mãos abertas dão zoom; o resto (pinça, punho, joinha, tesoura, menu na palma) é da oficina
+function maosNaOficina(novas, m, agora) {
+  if (novas.length === 2 && novas.every((x) => x.gesto === 'aberta') && !L.oficina.menuAberto()) {
+    const dist = Math.hypot(novas[0].centro.x - novas[1].centro.x, novas[0].centro.y - novas[1].centro.y);
+    if (!L.duas) L.duas = { dist, escala: L.zoomOficinaAlvo };
+    L.zoomOficinaAlvo = THREE.MathUtils.clamp(L.duas.escala * (dist / L.duas.dist), 0.35, 2.8);
+    L.gesto = 'dupla';
+    L.oficina.soltar();
+    return;
+  }
+  L.duas = null;
+  L.gesto = m ? m.gesto : 'nenhum';
+  const r = L.oficina.maos({
+    maos: novas, agora, cursor: L.cursor,
+    raioDe: (pt) => {
+      const [x, y] = naTela(pt, false);
+      raio.setFromCamera(ndcDaTela(x, y), L.camera);
+      return raio.ray.clone();
+    },
+    telaDe: (pt) => naTela(pt, false),
+  });
+  if (r?.toque) {
+    const estilo = L.maosVisuais[0].estilo;
+    L.ondas.emitir(r.toque.ponto, r.toque.normal, estilo === 'holo' ? '#8ff3f7' : ESTILOS_LUVA[estilo].acento, r.toque.tamanho);
+    L.maosVisuais[0].tocar();
+  }
+}
+
 // no palco, as pontas dos cinco dedos de cada mão viram baquetas, com a velocidade de cada uma
 function tocarComAsMaos(maos, agora) {
   const pontas = [];
@@ -1543,14 +1574,15 @@ function desenharMaos() {
   };
   L.maosVisuais.forEach((v, i) => {
     const m = L.maos[i];
-    v.atualizar(m, mapear, L.tempo, L.modo === 'real');
+    v.atualizar(m, mapear, L.tempo, { real: L.modo === 'real', ambiente: L.cena.environment, corGesto: m && (CORES_GESTO[m.gesto] || CORES_GESTO.nenhum) });
     const tag = L.hud[`maoTag${i}`];
     tag.classList.toggle('visivel', !!m);
     if (!m) return;
     const [x, y] = naTela(m.pts[0], false);
-    tag.style.transform = `translate(${x}px, ${y + 22}px) translate(-50%, 0)`;
+    tag.style.transform = `translate(${x}px, ${y + 34}px) translate(-50%, 0)`;
     const lado = m.lado.startsWith('direita') ? 'MÃO DIREITA' : m.lado.startsWith('esquerda') ? 'MÃO ESQUERDA' : 'MÃO';
-    const texto = `${lado} · ${nomeGesto(m.gesto)}`;
+    const tamanho = m.tamanhoCm > 5 ? ` · ${m.tamanhoCm.toFixed(1).replace('.', ',')} cm` : '';
+    const texto = `${lado}${tamanho} · ${nomeGesto(m.gesto)}`;
     if (tag.textContent !== texto) tag.textContent = texto;
     tag.style.setProperty('--cor', CORES_GESTO[m.gesto] || CORES_GESTO.nenhum);
   });
@@ -1567,6 +1599,10 @@ function ligarControlesManuais(canvas) {
     const caixa = L.raiz.getBoundingClientRect();
     return pontoNaCriacao(ndcDaTela(e.clientX - caixa.left, e.clientY - caixa.top));
   };
+  const xyDoMouse = (e) => {
+    const caixa = L.raiz.getBoundingClientRect();
+    return [e.clientX - caixa.left, e.clientY - caixa.top];
+  };
   const raioDoMouse = (e) => {
     const caixa = L.raiz.getBoundingClientRect();
     raio.setFromCamera(ndcDaTela(e.clientX - caixa.left, e.clientY - caixa.top), L.camera);
@@ -1575,7 +1611,7 @@ function ligarControlesManuais(canvas) {
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
     if (L.modoLab === 'oficina' && e.button === 0) {
-      L.oficina.entrada('pinca', raioDoMouse(e));
+      L.oficina.entrada('pinca', raioDoMouse(e), { xy: xyDoMouse(e) });
       if (L.oficina.ocupado()) {
         L.mouseOficina = true;
         return;
@@ -1601,7 +1637,7 @@ function ligarControlesManuais(canvas) {
       return;
     }
     if (L.mouseOficina) {
-      L.oficina.entrada('pinca', raioDoMouse(e));
+      L.oficina.entrada('pinca', raioDoMouse(e), { xy: xyDoMouse(e) });
       return;
     }
     if (!L.arraste) return;
@@ -1612,7 +1648,7 @@ function ligarControlesManuais(canvas) {
   });
   const soltar = (e) => {
     if (L.mouseCria) L.atelie.soltar();
-    if (L.mouseOficina) L.oficina.entrada('nenhum', raioDoMouse(e));
+    if (L.mouseOficina) L.oficina.entrada('nenhum', raioDoMouse(e), { xy: xyDoMouse(e) });
     L.mouseCria = null;
     L.mouseOficina = false;
     L.arraste = null;
@@ -1626,6 +1662,10 @@ function ligarControlesManuais(canvas) {
   }, { passive: false });
   canvas.addEventListener('dblclick', () => { if (L.modoLab === 'projecoes') desmontar(!L.desmontadoPorComando); });
   addEventListener('keydown', (e) => {
+    if (L.aberto && L.modoLab === 'oficina' && L.oficina.tecla(e)) {
+      e.preventDefault();
+      return;
+    }
     if (!L.aberto || e.target.closest?.('input, textarea')) return;
     if (e.key === 'ArrowRight') (L.modoLab === 'apps' ? L.mural.pagina(1) : mostrar(L.indice + 1));
     else if (e.key === 'ArrowLeft') (L.modoLab === 'apps' ? L.mural.pagina(-1) : mostrar(L.indice - 1));
@@ -1687,11 +1727,17 @@ async function montarCena(canvas) {
   cena.add(L.projecao);
   L.nuvem = criarNuvem();
   L.projecao.add(L.nuvem);
-  L.maosVisuais = [criarMaoHolografica(), criarMaoHolografica()];
+  L.maosVisuais = [criarLuva(), criarLuva()];
+  let estiloLuva = 'holo';
+  try { estiloLuva = localStorage.getItem('jarvis.luva') || 'holo'; } catch {}
   for (const v of L.maosVisuais) {
+    v.definirEstilo(ESTILOS_LUVA[estiloLuva] ? estiloLuva : 'holo');
     v.grupo.traverse((o) => o.layers.set(1));
     camera.add(v.grupo);
   }
+  L.ondas = criarOndas();
+  cena.add(L.ondas.grupo);
+  if (L.hud?.luva) L.hud.luva.textContent = `✋ ${ESTILOS_LUVA[L.maosVisuais[0].estilo].nome}`;
 
   L.kit = { gerador, q, total: TOTAL, projecao: L.projecao, nuvem: L.nuvem };
   L.formas = CATALOGO.map(() => null);
@@ -1701,7 +1747,7 @@ async function montarCena(canvas) {
     listar: () => (L.apps?.listar ? L.apps.listar() : Promise.reject(new Error('sem acesso ao PC'))),
     abrir: (app) => (L.apps?.abrir ? L.apps.abrir(app) : Promise.resolve({ ok: false, mensagem: 'Sem acesso ao Jarvis PC.' })),
   });
-  L.oficina = criarOficina({ cena, raiz: L.raiz, som: L.som, aoEvento: avisar });
+  L.oficina = criarOficina({ cena, raiz: L.raiz, som: L.som, aoEvento: avisar, renderer, servicos: () => L.servicos, video: () => L.video });
   L.musica = criarMusica({ raiz: L.raiz, aoEvento: avisar });
   L.elementos = criarElementos({
     raiz: L.raiz, som: L.som,
@@ -1828,6 +1874,7 @@ function quadro(agora) {
   L.ultimoQuadro = agora;
   L.tempo += delta;
   const dt = Math.min(delta, 0.05);
+  L.ondas.atualizar(dt);
   const t = L.tempo;
   L.fps = Math.round(L.fps * 0.9 + (1 / delta) * 0.1);
   processarMaos(performance.now());
@@ -1838,8 +1885,10 @@ function quadro(agora) {
   const rot = criando ? L.rotCriar : naOficina ? L.rotOficina : L.rot;
   const foco = L.modoLab === 'projecoes' ? L.elementos.foco() : null;
   const ocioso = !L.arraste && performance.now() - L.ultimaMaoEm > 1500 && !criando && !naOficina && !foco;
-  rot.y += rot.vy + (ocioso ? dt * 0.1 : 0);
-  rot.x = THREE.MathUtils.clamp(rot.x + rot.vx, -1.2, 1.2);
+  if (!naOficina) {
+    rot.y += rot.vy + (ocioso ? dt * 0.1 : 0);
+    rot.x = THREE.MathUtils.clamp(rot.x + rot.vx, -1.2, 1.2);
+  }
   rot.vy *= 0.9;
   rot.vx *= 0.9;
   // elemento em foco: a projeção gira até ele ficar de frente e desliza para ele ficar no centro
@@ -1973,6 +2022,7 @@ function quadro(agora) {
   }
   if (L.economia) L.renderer.render(L.cena, L.camera);
   else L.composer.render();
+  if (naOficina) L.oficina.depoisDeRenderizar();
   atualizarRotulos();
   const elementosAtivos = L.modoLab === 'projecoes' && L.intro > 0.85 && L.morph >= 1 && L.explosao < 0.3;
   L.elementos.atualizar({ camera: L.camera, projecao: L.projecao, escala: L.escala, ativo: elementosAtivos });
@@ -1992,7 +2042,8 @@ function quadro(agora) {
 }
 
 // ---------------- API usada pelo console ----------------
-export async function abrir({ raiz, stream = null, aoVoltar = null, visual = 'holo', clima = '', aoTrocarVisual = null, aoEvento = null, apps = null } = {}) {
+export async function abrir({ raiz, stream = null, aoVoltar = null, visual = 'holo', clima = '', aoTrocarVisual = null, aoEvento = null, apps = null, servicos = null } = {}) {
+  L.servicos = servicos;
   L.aoVoltar = aoVoltar;
   L.aoTrocarVisual = aoTrocarVisual;
   L.aoEvento = aoEvento;
@@ -2024,6 +2075,7 @@ export async function abrir({ raiz, stream = null, aoVoltar = null, visual = 'ho
   L.formas[L.indice].aoEntrar?.();
   if (L.modoLab === 'oficina') L.oficina.ativar(true);
   if (L.modoLab === 'musica') L.musica.ativar(true);
+  L.hud.esq.hidden = L.modoLab !== 'projecoes';
   quadro();
   if (await iniciarCamera(stream)) {
     iniciarMaos().catch((erro) => {
@@ -2180,12 +2232,24 @@ export function modo(novo) {
   const frases = {
     apps: ['abriu o mural de apps do laboratório', 'Mural de apps aberto: ele aponta e faz pinça para abrir um programa.'],
     criar: ['entrou no ateliê para criar com as mãos', 'Ateliê aberto: ele desenha no ar com o dedo e cria formas com a pinça.'],
-    oficina: ['entrou na oficina para projetar uma peça 3D', 'Oficina aberta: ele desenha peças na mesa com a pinça, com medidas em milímetros, furos e exportação STL.'],
+    oficina: ['entrou na oficina (CAD no estilo do Inventor)', 'Oficina aberta: CAD paramétrico como o Inventor, com esboço, extrusão, furos, montagem, desenho técnico e inspeção, pelas mãos ou pela voz.'],
     musica: ['subiu no palco de instrumentos holográficos', 'Palco aberto: piano, bateria, harpa de laser, teremim e trilha de cinema, tocados com os dedos.'],
     projecoes: [`voltou para as projeções (${f.titulo})`, `De volta às projeções, exibindo ${f.titulo}.`],
   }[novo];
   avisar(frases[0]);
   return frases[1];
+}
+
+// estilo da luva que veste as mãos: holograma, armadura, nano ou carbono
+export function luva(estilo) {
+  const nomes = { holograma: 'holo', holo: 'holo', armadura: 'armadura', nano: 'nano', carbono: 'carbono', 'fibra de carbono': 'carbono' };
+  const chave = nomes[normalizar(estilo)] || (ESTILOS_LUVA[estilo] ? estilo : null);
+  if (!chave) return 'Os estilos da luva são holograma, armadura, nano e carbono.';
+  for (const v of L.maosVisuais) v.definirEstilo(chave, L.modo === 'real');
+  try { localStorage.setItem('jarvis.luva', chave); } catch {}
+  if (L.hud?.luva) L.hud.luva.textContent = `✋ ${ESTILOS_LUVA[chave].nome}`;
+  avisar(`trocou a luva das mãos para o estilo ${ESTILOS_LUVA[chave].nome.toLowerCase()}`);
+  return `Luva no estilo ${ESTILOS_LUVA[chave].nome.toLowerCase()}.`;
 }
 
 export async function abrirApp(nome) {
@@ -2231,9 +2295,37 @@ export function adicionarPeca(texto) {
   return L.oficina.adicionarPorTexto(texto);
 }
 
-export function exportarPeca() {
+export function exportarPeca(formato = 'stl') {
   if (!L.pronto) return 'O laboratório ainda não abriu.';
-  return L.oficina.exportar();
+  return L.oficina.exportar(formato);
+}
+
+// oficina pela voz: projetar, editar, foto, celular, apresentação, desenho, material, corte, montagem…
+export async function oficina(acao, p = {}) {
+  if (!L.pronto) return 'O laboratório ainda não abriu.';
+  if (L.modoLab !== 'oficina') modo('oficina');
+  const o = L.oficina;
+  switch (acao) {
+    case 'projetar': return o.projetar(p.texto || '');
+    case 'foto': return o.fotoPeca(p.texto || '');
+    case 'celular': return o.celular();
+    case 'apresentar': return o.apresentar(!!p.gravar);
+    case 'desenho': return o.folha();
+    case 'material': return o.material(p.texto || '');
+    case 'corte': return o.corte(p.ligar !== false);
+    case 'explodir': return o.explodir(p.ligar === false ? 0 : 1);
+    case 'biblioteca': return o.biblioteca(p.tipo, p.tamanho, p.comprimento);
+    case 'vista': return o.olhar(p.texto || 'iso');
+    case 'aba': return o.aba(p.texto || 'modelo');
+    case 'exemplo': return o.exemplo();
+    case 'exportar': return o.exportar(p.formato || 'stl');
+    case 'operacoes': return o.aplicarOperacoes(p.operacoes || []);
+    default: return 'Ações da oficina: projetar, foto, celular, apresentar, desenho, material, corte, explodir, biblioteca, vista, aba, exemplo e exportar.';
+  }
+}
+
+export function modeloOficina() {
+  return L.pronto ? L.oficina.modelo() : null;
 }
 
 export function desfazerCriacao() {
