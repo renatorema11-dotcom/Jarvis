@@ -5,15 +5,18 @@ Meu assistente pessoal — voz pelo ElevenLabs, segundo cérebro no n8n, interfa
 
 ```
 index.html (navegador)                     n8n.nutriali.cloud
-  ├─ voz ↔ agente ElevenLabs ──MCP──► Jarvis — Cérebro (MCP), 32 ferramentas:
-  │                                     memória · tarefas · rotinas · Gmail · Agenda · Spotify
-  │                                     internet · clima · notícias · finanças · pessoas · hábitos
+  ├─ voz ↔ agente ElevenLabs ──MCP──► Jarvis — Cérebro (MCP), 34 ferramentas:
+  │                                     memória (também pelo sentido) · tarefas · rotinas · Gmail
+  │                                     Agenda · Spotify · internet · clima · notícias · finanças
+  │                                     pessoas · hábitos · painel de desenvolvedor
   ├─ GET  /webhook/jarvis/contexto ──► perfil, memórias, tarefas, agenda, clima, hábitos,
   │                                     finanças e aniversários (viram variáveis do agente)
-  ├─ POST /webhook/jarvis/visao ─────► foto da câmera → descrição (Groq)
+  ├─ POST /webhook/jarvis/visao ─────► foto da câmera ou print da tela → descrição (Groq)
   ├─ POST /webhook/jarvis/conversa ──► transcrição → memórias, tarefas e perfil (Groq)
   ├─ reconhecimento facial ──────────► local, no navegador (face-api); o rosto nunca sai dele
-  └─ controlar_pc ───────────────────► pc/jarvis-pc.py em 127.0.0.1:47801
+  └─ controlar_pc · ver_tela · tv ──► pc/jarvis-pc.py em 127.0.0.1:47801
+
+Telegram (celular) ──► Jarvis — Telegram: texto ou áudio → agente com o mesmo Cérebro → texto e voz
 ```
 
 Workflows no n8n:
@@ -27,7 +30,10 @@ Workflows no n8n:
 | Jarvis — Spotify (tocar) | Acha a playlist, escolhe o aparelho, toca e confere |
 | Jarvis — Internet | Pesquisa na web, clima (Open-Meteo) e notícias (Google Notícias) |
 | Jarvis — Cálculos | Totais de finanças, sequência de hábitos e próximos aniversários |
-| Jarvis — Navegador (cérebro) | Escolhe a próxima ação do navegador a cada passo (Groq) |
+| Jarvis — Navegador (cérebro) | Escolhe a próxima ação do navegador a cada passo (Claude, quando ligado, ou Groq) |
+| Jarvis — Dev | Último commit, deploy na Vercel e issues abertas de cada projeto (`jarvis/dev` e ferramenta `dev_status`) |
+| Jarvis — Memória semântica | Lembra pelo sentido nas memórias, conversas e pessoas (`jarvis/memoria-buscar` e ferramenta `memoria_lembrar`) |
+| Jarvis — Telegram | O Jarvis no celular, por texto ou áudio (desligado até ter o bot) |
 
 Dados nas Data Tables `jarvis_memorias`, `jarvis_tarefas`, `jarvis_rotinas`, `jarvis_conversas`, `jarvis_perfil`, `jarvis_financas`, `jarvis_pessoas`, `jarvis_habitos` e `jarvis_habitos_registros`.
 
@@ -82,7 +88,7 @@ O dedo apontado vira um **cursor** na tela: ele clica em qualquer botão do labo
 
 **Criar:** um ateliê para desenhar no ar com o dedo (traços de luz), criar formas com a pinça (cubo, esfera, anel, cristal, pirâmide e cilindro, nas cores da barra; afastar os dedos aumenta) e pegar e mover com a pinça. Punho gira tudo e duas mãos ampliam. A criação fica salva no navegador (`holo-criar.js`).
 
-**O Jarvis acompanha o laboratório:** durante a conversa, o que você faz lá (trocar de projeção, abrir um app, desenhar, criar uma forma) chega a ele como contexto. A ferramenta `holograma` também tem as ações `apps`, `criar`, `oficina`, `musica`, `projecoes`, `abrir_app`, `criar_forma`, `selecionar`, `soltar`, `instrumento`, `adicionar` (uma forma simples na oficina, como "cilindro 30 20"), `projetar` (a peça ou a mudança descrita em voz), `foto_peca`, `material`, `desenho`, `corte`, `explodir`, `biblioteca` ("parafuso M8 30"), `vista`, `celular`, `apresentar`, `exemplo_peca`, `exportar` (STL, OBJ ou GLB), `luva`, `desfazer`, `limpar`, `estado` (o que está acontecendo, em texto) e `ver` (uma foto da cena, com a sua câmera no canto, analisada pela visão do cérebro). O workflow "API da interface" no n8n atende a oficina em `jarvis/cad` (frase ou foto vira operações de CAD pelo Groq), `jarvis/ra` (guarda o GLB da peça por 24 horas na tabela `jarvis_ra`) e `jarvis/ra-arquivo` (o link público que o QR code abre).
+**O Jarvis acompanha o laboratório:** durante a conversa, o que você faz lá (trocar de projeção, abrir um app, desenhar, criar uma forma) chega a ele como contexto. A ferramenta `holograma` também tem as ações `apps`, `criar`, `oficina`, `musica`, `projecoes`, `abrir_app`, `criar_forma`, `selecionar`, `soltar`, `instrumento`, `adicionar` (uma forma simples na oficina, como "cilindro 30 20"), `projetar` (a peça ou a mudança descrita em voz), `foto_peca`, `material`, `desenho`, `corte`, `explodir`, `biblioteca` ("parafuso M8 30"), `vista`, `celular`, `apresentar`, `exemplo_peca`, `exportar` (STL, OBJ ou GLB), `luva`, `desfazer`, `limpar`, `estado` (o que está acontecendo, em texto) e `ver` (uma foto da cena, com a sua câmera no canto, analisada pela visão do cérebro). O workflow "API da interface" no n8n atende a oficina em `jarvis/cad` (frase ou foto vira operações de CAD pelo Claude, quando ligado, ou pelo Groq), `jarvis/ra` (guarda o GLB da peça por 24 horas na tabela `jarvis_ra`) e `jarvis/ra-arquivo` (o link público que o QR code abre).
 
 O botão VISUAL, no laboratório e na barra do console, troca entre dois estilos e fica salvo no navegador. O **holograma** (padrão) é o de cinema: partículas, raios saindo da mesa de projeção e etiquetas presas aos objetos. A **foto real** troca as partículas por objetos de verdade: Terra com texturas da NASA, nuvens, luzes das cidades e dia e noite conforme o sol de agora; Lua com textura de verdade e a fase de hoje; Saturno com anéis e sombras; Sistema Solar com o Sol fervendo e os planetas girando; Via Láctea com faixas de poeira; Buraco Negro com o disco quente e a luz entortada em volta; Reator Arc de aço e cobre; Turbina de metal em corte; Drone de fibra de carbono; Átomo, DNA e Molécula de vidro polido; Coração úmido batendo, com os vasos; Cidade como maquete noturna, com janelas acesas e trânsito; Terreno em relevo com lago, mata, rocha e neve. A Terra mostra a ISS na posição real (API wheretheiss.at) e o clima de Campo Mourão. Os dois estilos ficam numa sala escura com piso de vidro que reflete a cena, e há sons sintetizados no botão SOM. A voz troca o estilo pela ferramenta `holograma`, com as ações `foto_real` e `holograma`.
 
@@ -94,10 +100,37 @@ O painel DISPOSITIVOS (botão VARRER) e a ferramenta `dispositivos` do agente pe
 
 ### Navegador (tarefas em sites)
 
-Peça coisas como "procura um fone bluetooth no Mercado Livre e me fala os três primeiros". A ferramenta `navegador` do agente pede ao Jarvis PC, que abre uma janela própria do Chrome (o "Chrome do Jarvis", perfil em `~/jarvis/chrome-jarvis`) e faz a tarefa passo a passo (`pc/navegador.py` com Playwright). A cada passo o workflow **Jarvis — Navegador (cérebro)** no n8n escolhe a próxima ação (hoje com o Groq; para trocar pelo Claude, mude só o nó *Pensar*). Antes de comprar, enviar, publicar ou apagar, ele para e pergunta; nunca digita senhas nem cartões. Para sites com login, entre uma vez nessa janela do Chrome do Jarvis.
+Peça coisas como "procura um fone bluetooth no Mercado Livre e me fala os três primeiros". A ferramenta `navegador` do agente pede ao Jarvis PC, que abre uma janela própria do Chrome (o "Chrome do Jarvis", perfil em `~/jarvis/chrome-jarvis`) e faz a tarefa passo a passo (`pc/navegador.py` com Playwright). A cada passo o workflow **Jarvis — Navegador (cérebro)** no n8n escolhe a próxima ação: pelo Claude, quando o nó *Pensar (Claude)* está ligado, e pelo Groq em qualquer outro caso (veja "Claude como cérebro" abaixo). Antes de comprar, enviar, publicar ou apagar, ele para e pergunta; nunca digita senhas nem cartões. Para sites com login, entre uma vez nessa janela do Chrome do Jarvis.
 
 Precisa do Playwright (e, para os dispositivos, dos pacotes winrt) no Python do Jarvis PC:
 
 ```bash
-uv pip install --python "%USERPROFILE%\jarvis\OpenJarvis\.venv\Scripts\python.exe" playwright winrt-Windows.Devices.Enumeration winrt-Windows.Foundation winrt-Windows.Foundation.Collections
+uv pip install --python "%USERPROFILE%\jarvis\OpenJarvis\.venv\Scripts\python.exe" playwright winrt-Windows.Devices.Enumeration winrt-Windows.Foundation winrt-Windows.Foundation.Collections mss pillow aiowebostv
 ```
+
+### Tela do PC
+
+"Jarvis, olha minha tela: que erro é esse?" A ferramenta `ver_tela` pede ao Jarvis PC um print (`pc/tela.py`, rota `/tela?monitor=`; 0 é o monitor principal, 1 e 2 cada monitor e -1 todos juntos), reduzido para até 1600 px, e a visão do cérebro (`jarvis/visao` com `contexto: "tela"`) descreve o que aparece e responde à pergunta. O print passa pelo n8n e pelo Groq e não fica guardado.
+
+### TVs (AOC Roku e LG)
+
+A ferramenta `tv` controla as TVs pela rede, pelo Jarvis PC (`pc/tv.py`, rota `/tv`): procurar as TVs (SSDP), ligar e desligar, volume (mais, menos, mudo ou um número), tocar e pausar, teclas do controle, entrada HDMI, abrir um aplicativo pelo nome, procurar no YouTube, mensagem na tela (só a LG) e o que está passando. A Roku usa a API de controle da rede local (porta 8060); a LG usa o webOS (`aiowebostv`) e, na primeira vez, mostra um pedido de pareamento na TV que precisa ser aceito no controle. As TVs encontradas, o MAC (para ligar a LG pela rede) e a chave da LG ficam em `pc/tvs.local.json`, fora do git. Para ligar pela rede, ative "Início rápido da TV" na Roku e "Ligar via Wi-Fi" (ou "Ligar com dispositivo móvel") na LG.
+
+## Painel de desenvolvedor e memória pelo sentido
+
+"Jarvis, como está o deploy do Jarvis?" A ferramenta `dev_status` (workflow **Jarvis — Dev**, também em `GET jarvis/dev?projeto=`) junta o último commit no GitHub, o estado do deploy na Vercel e as issues abertas.
+
+"O que eu falei sobre o app da empresa?" A ferramenta `memoria_lembrar` (workflow **Jarvis — Memória semântica**, também em `POST jarvis/memoria-buscar`) junta as memórias, os resumos das conversas e as pessoas, e o Groq escolhe o que responde à pergunta pelo significado, não pela palavra exata. Se o Groq falhar, ela volta para a busca por palavras.
+
+## Jarvis no Telegram
+
+O workflow **Jarvis — Telegram** leva o Jarvis para o celular: você manda texto ou áudio para o bot, o áudio é transcrito pelo Whisper do Groq, um agente (Groq) responde usando as mesmas ferramentas do Cérebro (memória, tarefas, agenda, e-mails, finanças, clima, dev_status...) e a resposta volta em texto e, quando você mandou áudio, também na voz do Jarvis (ElevenLabs). Só o dono conversa com ele: o primeiro `/start` registra o seu chat e os outros são ignorados. Para ligar:
+
+1. No Telegram, fale com o @BotFather, mande `/newbot` e guarde o token do bot.
+2. No n8n, crie uma credencial **Telegram API** chamada "Telegram — Jarvis" com esse token e escolha-a nos nós do Telegram do workflow.
+3. No nó **Cérebro do Jarvis**, cole o endereço de produção do gatilho MCP do workflow Cérebro (o mesmo cadastrado no ElevenLabs).
+4. Publique o workflow e mande `/start` para o bot.
+
+## Claude como cérebro
+
+O navegador (workflow **Jarvis — Navegador (cérebro)**) e a oficina (rota `jarvis/cad` em **API da interface**) já têm um caminho pelo Claude (`claude-opus-5-5`, pela Messages API), desligado até existir a chave. Para ligar, crie no n8n uma credencial **Anthropic** com a sua chave da API, escolha-a nos nós *Pensar (Claude)* e *Projetar peça (Claude)* e ative esses dois nós. Se o Claude falhar ou recusar um pedido, o Groq responde no lugar, como hoje.

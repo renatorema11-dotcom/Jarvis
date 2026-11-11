@@ -956,6 +956,10 @@ const NOMES = {
   navegador: 'Usando o navegador',
   dispositivos: 'Procurando dispositivos',
   holograma: 'Projetando holograma',
+  ver_tela: 'Olhando a tela do PC',
+  tv: 'Controlando a TV',
+  dev_status: 'Vendo os deploys',
+  memoria_lembrar: 'Lembrando',
 };
 const ROTULOS = {
   offline: ['EM ESPERA', 'OFFLINE', 'TOQUE EM INICIAR PARA FALAR'],
@@ -2047,6 +2051,37 @@ async function controlarPc({ acao, alvo = '', valor = '' } = {}) {
   }
 }
 
+// ---------- a tela do PC: o Jarvis PC tira o print e a visão do cérebro explica ----------
+async function verTela({ pergunta = '', monitor = 0 } = {}) {
+  let print;
+  try {
+    print = await chamarPc(`/tela?monitor=${Number(monitor) || 0}`);
+  } catch {
+    definirChip('pc', '', 'OFFLINE');
+    return 'O agente do PC não está rodando, então não consigo ver a tela. Peça para o Renato abrir o "Jarvis PC".';
+  }
+  if (!print?.ok) return print?.mensagem || 'Não consegui tirar o print da tela.';
+  registrarAtividade('Olhando a tela do PC', 'ok');
+  try {
+    const r = await chamarN8n('jarvis/visao', { method: 'POST', body: { imagem: print.imagem, contexto: 'tela', pergunta: pergunta || 'O que está na minha tela agora?' } });
+    return r.descricao || 'Não consegui entender a tela.';
+  } catch (erro) {
+    return `A análise da tela falhou (${erro.message}).`;
+  }
+}
+
+// ---------- TVs da casa (Roku e LG), pelo Jarvis PC ----------
+async function usarTv({ acao = 'estado', alvo = '', valor = '', tv = '' } = {}) {
+  try {
+    const r = await chamarPc('/tv', { acao, alvo, valor, tv });
+    registrarAtividade(`TV: ${r.mensagem || acao}`, r.ok ? 'ok' : 'erro');
+    return r.mensagem || (r.ok ? 'Feito.' : 'A TV não respondeu.');
+  } catch {
+    definirChip('pc', '', 'OFFLINE');
+    return 'O agente do PC não está rodando, então não alcanço as TVs. Peça para o Renato abrir o "Jarvis PC".';
+  }
+}
+
 // ---------- navegador (tarefas no "Chrome do Jarvis", feitas pelo Jarvis PC) ----------
 const nav = { acompanhando: false, idTarefa: 0, ultimoPasso: 0, avisado: '' };
 const desfechoNavegador = (e) => `${e.id}:${e.fase}:${e.passo}`;
@@ -2673,6 +2708,8 @@ async function ligar() {
         navegador: usarNavegador,
         dispositivos: usarDispositivos,
         holograma: usarHolograma,
+        ver_tela: verTela,
+        tv: usarTv,
       },
       onConnect: ({ conversationId }) => {
         conversaId = conversationId;

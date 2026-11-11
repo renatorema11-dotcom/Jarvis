@@ -9,7 +9,9 @@ nunca um comando livre. A ferramenta navegador (/navegador) faz tarefas numa
 janela própria do Chrome — veja navegador.py. /dispositivos procura fones,
 celulares, TVs e outros aparelhos por perto — veja dispositivos.py. /apps lista os
 programas do menu Iniciar com os ícones, para a lista de apps do laboratório
-holográfico — veja apps.py.
+holográfico — veja apps.py. /tela tira um print da tela, só quando o agente pede (ver_tela),
+para a visão do cérebro explicar o que aparece — veja tela.py. /tv controla as TVs da casa
+pela rede (Roku e LG webOS) — veja tv.py.
 
 Opcional: com numpy e sounddevice instalados (o venv do OpenJarvis tem), fica
 ouvindo DUAS palmas e abre a página do Jarvis já iniciando a conversa.
@@ -28,10 +30,12 @@ import unicodedata
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlsplit
 
 import apps
 import dispositivos
+import tela
+import tv
 from navegador import Navegador
 
 # ---------------- CONFIG ----------------
@@ -223,10 +227,22 @@ class Servidor(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path not in ("/status", "/navegador", "/dispositivos", "/apps"):
+        partes = urlsplit(self.path)
+        caminho = partes.path
+        if caminho not in ("/status", "/navegador", "/dispositivos", "/apps", "/tela", "/tv"):
             return self.responder(404, {"ok": False})
         if not self.autorizado():
             return
+        if caminho == "/tela":
+            try:
+                monitor = int((parse_qs(partes.query).get("monitor") or ["0"])[0])
+                resultado = tela.capturar(monitor)
+                print(f">> tela: print {resultado['largura']}x{resultado['altura']}")
+                return self.responder(200, resultado)
+            except Exception as erro:
+                return self.responder(200, {"ok": False, "mensagem": f"Não consegui tirar o print: {erro}"})
+        if caminho == "/tv":
+            return self.responder(200, tv.listar())
         if self.path == "/navegador":
             return self.responder(200, NAVEGADOR.comando("status"))
         if self.path == "/apps":
@@ -236,10 +252,10 @@ class Servidor(BaseHTTPRequestHandler):
                 return self.responder(200, dispositivos.buscar())
             except Exception as erro:
                 return self.responder(200, {"ok": False, "mensagem": f"A busca de dispositivos falhou: {erro}"})
-        self.responder(200, {"ok": True, "versao": 4, "apps": sorted(APPS), "palmas": PALMAS_ATIVAS})
+        self.responder(200, {"ok": True, "versao": 5, "apps": sorted(APPS), "palmas": PALMAS_ATIVAS, "recursos": ["tela", "tv"]})
 
     def do_POST(self):
-        if self.path not in ("/acao", "/navegador", "/dispositivos/conectar"):
+        if self.path not in ("/acao", "/navegador", "/dispositivos/conectar", "/tv"):
             return self.responder(404, {"ok": False})
         if not self.autorizado():
             return
@@ -249,6 +265,10 @@ class Servidor(BaseHTTPRequestHandler):
             pedido = json.loads(self.rfile.read(tamanho) or b"{}")
             if self.path == "/navegador":
                 return self.responder(200, NAVEGADOR.comando(pedido.get("acao", ""), pedido.get("texto", "")))
+            if self.path == "/tv":
+                resultado = tv.comando(str(pedido.get("acao", "")), str(pedido.get("alvo", "")), str(pedido.get("valor", "")), str(pedido.get("tv", "")))
+                print(f">> tv {pedido.get('acao', '?')}: {resultado['mensagem']}")
+                return self.responder(200, resultado)
             if self.path == "/dispositivos/conectar":
                 resultado = dispositivos.conectar(str(pedido.get("id", "")))
                 print(f">> dispositivos: {resultado['mensagem']}")
