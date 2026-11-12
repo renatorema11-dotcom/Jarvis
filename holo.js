@@ -44,6 +44,7 @@ import { criarLuva, criarOndas, ESTILOS_LUVA, ORDEM_ESTILOS } from './holo-luva.
 import { criarElementos } from './holo-elementos.js';
 import { criarOficina } from './holo-cad.js';
 import { criarMusica, INSTRUMENTOS } from './holo-musica.js';
+import { criarJanela } from './holo-janela.js';
 
 // ---------------- CONFIG ----------------
 const VISAO = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';
@@ -170,6 +171,9 @@ const L = {
   ultimaMaoEm: 0,
   fps: 0,
   hud: {},
+  janela: null,
+  msMaos: 0,
+  quadroAlternado: false,
 };
 
 let TOTAL = TOTAL_NORMAL;
@@ -1060,6 +1064,7 @@ function montarHud(raiz) {
       </nav>
       <div class="holo-espaco"></div>
       <div class="holo-relogio" data-h="relogio"></div>
+      <button class="holo-btn" type="button" data-mira data-h="janela" aria-pressed="false" title="Janela 3D: a projeção ganha profundidade quando você mexe a cabeça (tecla J)">◫ <span class="holo-longo">JANELA </span>3D</button>
       <button class="holo-btn" type="button" data-mira data-h="som" aria-label="Ligar ou desligar o som">SOM</button>
       <button class="holo-btn" type="button" data-mira data-h="luva" aria-label="Trocar o estilo da luva" title="Estilo da luva"></button>
       <button class="holo-btn" type="button" data-mira data-h="visual"></button>
@@ -1110,6 +1115,11 @@ function montarHud(raiz) {
     L.som.clique();
     const atual = L.maosVisuais[0]?.estilo || 'holo';
     luva(ORDEM_ESTILOS[(ORDEM_ESTILOS.indexOf(atual) + 1) % ORDEM_ESTILOS.length]);
+  });
+  L.janela = criarJanela({ container: raiz.querySelector('.holo-dir'), som: L.som, carregarVisao, aoEvento: avisar });
+  h.janela.addEventListener('click', () => {
+    L.som.clique();
+    alternarJanela(!L.janela.ligada());
   });
   h.desmontar.addEventListener('click', () => desmontar(!L.desmontadoPorComando));
   h.centralizar.addEventListener('click', centralizar);
@@ -1173,6 +1183,7 @@ function atualizarHud() {
     ['ESCALA', `${L.escala.toFixed(2)}×`],
     ['ROTAÇÃO', `${grau(L.rot.x)} / ${grau(L.rot.y)}`],
     ['ESTADO', L.explosao > 0.3 ? 'DESMONTADO' : 'MONTADO'],
+    ...(L.janela.ligada() ? [['JANELA 3D', L.janela.estado()]] : []),
     ['QUADROS', `${L.fps} FPS`],
     ['VISUAL', L.modo === 'real' ? 'FOTO REAL' : 'HOLOGRAMA'],
     ['QUALIDADE', L.economia ? 'ECONÔMICA' : 'MÁXIMA'],
@@ -1275,10 +1286,21 @@ async function iniciarCamera(stream) {
   }
 }
 
+// o tasks-vision é carregado uma vez só: as mãos e a janela 3D (rosto) usam o mesmo runtime
+let visao = null;
+function carregarVisao() {
+  visao ||= (async () => {
+    const modulo = await import(`${VISAO}/vision_bundle.mjs`);
+    const arquivos = await modulo.FilesetResolver.forVisionTasks(`${VISAO}/wasm`);
+    return { modulo, arquivos };
+  })();
+  visao.catch(() => { visao = null; });
+  return visao;
+}
+
 async function iniciarMaos() {
   if (L.detector) return;
-  const { FilesetResolver, HandLandmarker } = await import(`${VISAO}/vision_bundle.mjs`);
-  const arquivos = await FilesetResolver.forVisionTasks(`${VISAO}/wasm`);
+  const { modulo: { HandLandmarker }, arquivos } = await carregarVisao();
   const opcoes = (delegate) => ({
     baseOptions: { modelAssetPath: MODELO_MAOS, delegate },
     runningMode: 'VIDEO', numHands: 2,
@@ -1383,14 +1405,23 @@ function pontoNaCriacao(ndc, palma = 0) {
 const ndcDaTela = (x, y) => new THREE.Vector2((x / L.raiz.clientWidth) * 2 - 1, -((y / L.raiz.clientHeight) * 2 - 1));
 
 function processarMaos(agora) {
-  if (!L.detector || !L.video || L.video.readyState < 2 || L.video.currentTime === L.ultimoTempoVideo) return;
+  if (!L.video || L.video.readyState < 2 || L.video.currentTime === L.ultimoTempoVideo) return;
   L.ultimoTempoVideo = L.video.currentTime;
+  if (L.janela?.querRosto(L.modoLab)) {
+    L.janela.processar(L.video, agora);
+    // rosto e mãos juntos passando de uns 16 ms por quadro: as mãos ficam com um quadro sim, outro não
+    L.quadroAlternado = !L.quadroAlternado;
+    if (L.janela.custo() + L.msMaos > 16 && L.quadroAlternado) return;
+  }
+  if (!L.detector) return;
   let resultado;
+  const inicio = performance.now();
   try {
     resultado = L.detector.detectForVideo(L.video, agora);
   } catch {
     return;
   }
+  L.msMaos = L.msMaos * 0.9 + (performance.now() - inicio) * 0.1;
   const novas = L.rastreio.processar(resultado, agora);
   const anteriores = L.maos;
   L.maos = novas;
@@ -1568,8 +1599,15 @@ function desenharMaos() {
   const largura = altura * L.camera.aspect;
   const w = L.raiz.clientWidth;
   const h = L.raiz.clientHeight;
+  const foraDoEixo = L.janela?.mistura() > 0;
   const mapear = (pt) => {
     const [x, y] = naTela(pt, false);
+    if (foraDoEixo) {
+      apoioMao.set((x / w) * 2 - 1, -((y / h) * 2 - 1), 0.5).applyMatrix4(L.camera.projectionMatrixInverse);
+      apoioMao.multiplyScalar(-dist / apoioMao.z);
+      apoioMao.z -= (pt.z || 0) * largura * 0.6;
+      return apoioMao;
+    }
     return apoioMao.set((x / w - 0.5) * largura, -(y / h - 0.5) * altura, -dist - (pt.z || 0) * largura * 0.6);
   };
   L.maosVisuais.forEach((v, i) => {
@@ -1670,6 +1708,7 @@ function ligarControlesManuais(canvas) {
     if (e.key === 'ArrowRight') (L.modoLab === 'apps' ? L.mural.pagina(1) : mostrar(L.indice + 1));
     else if (e.key === 'ArrowLeft') (L.modoLab === 'apps' ? L.mural.pagina(-1) : mostrar(L.indice - 1));
     else if (e.key === 'z' && (e.ctrlKey || e.metaKey) && L.modoLab === 'criar') L.atelie.desfazer();
+    else if ((e.key === 'j' || e.key === 'J') && !e.ctrlKey && !e.metaKey && !e.altKey) alternarJanela(!L.janela.ligada());
     else if (e.key === 'Escape') (L.elementos.foco() ? L.elementos.soltar() : L.aoVoltar?.());
     else if (e.key === ' ') {
       e.preventDefault();
@@ -1866,6 +1905,7 @@ function aplicarModo() {
 }
 
 const apoioFoco = new THREE.Vector3();
+const ALVO_CAMERA = new THREE.Vector3(0, 0.15, 0);
 function quadro(agora) {
   if (!L.aberto) return;
   L.quadro = requestAnimationFrame(quadro);
@@ -1886,7 +1926,7 @@ function quadro(agora) {
   const foco = L.modoLab === 'projecoes' ? L.elementos.foco() : null;
   const ocioso = !L.arraste && performance.now() - L.ultimaMaoEm > 1500 && !criando && !naOficina && !foco;
   if (!naOficina) {
-    rot.y += rot.vy + (ocioso ? dt * 0.1 : 0);
+    rot.y += rot.vy + (ocioso ? dt * (L.janela.mistura() > 0.5 ? 0.03 : 0.1) : 0);
     rot.x = THREE.MathUtils.clamp(rot.x + rot.vx, -1.2, 1.2);
   }
   rot.vy *= 0.9;
@@ -1933,7 +1973,13 @@ function quadro(agora) {
     THREE.MathUtils.lerp(7, 1.2, e) - L.paralaxe.y * 0.5 + Math.sin(t * 0.31) * 0.04,
     THREE.MathUtils.lerp(L.camZ + 12, L.camZ, e),
   );
-  L.camera.lookAt(0, 0.15, 0);
+  L.camera.lookAt(ALVO_CAMERA);
+  const misturaJanela = L.janela.aplicar(L.camera, {
+    modoLab: L.modoLab, intro: L.intro, camZ: L.camZ, alvo: ALVO_CAMERA, ponteiro: L.ponteiro,
+    temCamera: !!L.stream, dt: Math.min(delta, 0.1), largura: L.raiz.clientWidth || innerWidth, altura: L.raiz.clientHeight || innerHeight,
+  });
+  // a janela põe o olho mais longe: a neblina afina na mesma proporção para a projeção não ficar apagada
+  L.neblina.density = 0.016 * (misturaJanela ? THREE.MathUtils.lerp(1, L.camZ / Math.max(L.camZ, L.janela.distanciaOlho()), misturaJanela) : 1);
 
   const f = L.formas[L.indice];
   const u = L.nuvem.material.uniforms;
@@ -2376,11 +2422,36 @@ export function descrever() {
   const foco = L.modoLab === 'projecoes' ? L.elementos.foco() : null;
   if (foco) partes.push(`Elemento em foco: ${foco.nome} — ${foco.resumo}.`);
   else if (L.modoLab === 'projecoes') partes.push(`Nível de detalhe ${L.elementos.nivel()} de 3, com ${L.elementos.quantos()} elementos à vista (${L.elementos.lista().filter((x) => x.nivel <= L.elementos.nivel()).map((x) => x.nome.toLowerCase()).join(', ')}).`);
+  if (L.janela?.ligada()) partes.push(`A janela 3D está ligada (${L.janela.estado().toLowerCase()}): a projeção ganha profundidade conforme o Renato mexe a cabeça${L.modoLab === 'projecoes' ? '' : ', mas só funciona no modo projeções'}.`);
   const gesto = NOMES_GESTO[L.modoLab][L.duas ? 'dupla' : L.gesto];
   partes.push(L.maos.length ? `O Renato está com ${L.maos.length === 2 ? 'as duas mãos' : 'uma mão'} na frente da câmera${gesto && gesto !== '—' ? `, gesto ${gesto.toLowerCase()}` : ''}.` : 'Nenhuma mão na frente da câmera agora.');
   if (L.cursor.alvo) partes.push(`O cursor da mão está em cima de "${(L.cursor.alvo.title || L.cursor.alvo.textContent || '').trim().slice(0, 40)}".`);
   if (L.diario.length) partes.push(`Últimas ações: ${L.diario.slice(-6).map((d) => d.texto).join('; ')}.`);
   return partes.join(' ');
+}
+
+// janela 3D: a câmera segue os olhos do Renato e a projeção fica atrás do vidro da tela
+function alternarJanela(sim) {
+  const texto = L.janela.ligar(sim);
+  L.hud.janela.classList.toggle('ativo', L.janela.ligada());
+  L.hud.janela.setAttribute('aria-pressed', String(L.janela.ligada()));
+  L.hud.toast.textContent = L.janela.ligada() ? 'JANELA 3D · FIQUE NA POSIÇÃO NORMAL PARA CALIBRAR' : 'JANELA 3D DESLIGADA';
+  L.hud.toast.classList.remove('mostra');
+  void L.hud.toast.offsetWidth;
+  L.hud.toast.classList.add('mostra');
+  return texto;
+}
+
+export function janela(sim = true) {
+  if (!L.pronto) return 'O laboratório ainda não abriu.';
+  if (sim && L.modoLab !== 'projecoes') modo('projecoes');
+  if (sim === L.janela.ligada()) return sim ? `A janela 3D já está ligada: ${L.janela.estado().toLowerCase()}.` : 'A janela 3D já está desligada.';
+  return alternarJanela(sim);
+}
+
+export function calibrarJanela() {
+  if (!L.pronto || !L.janela.ligada()) return 'Ligue a janela 3D primeiro.';
+  return L.janela.calibrar();
 }
 
 // registra uma ação da pessoa no laboratório e avisa o console (que repassa para o Jarvis)
@@ -2392,7 +2463,7 @@ function avisar(texto) {
 
 export function estadoAtual() {
   const f = L.formas[L.indice];
-  return { aberto: L.aberto, forma: f?.titulo, formas: CATALOGO.map((c) => c.titulo), maos: L.maos.length, rastreamento: !!L.detector, visual: L.modo, modo: L.modoLab, foco: L.elementos?.foco()?.nome || null };
+  return { aberto: L.aberto, forma: f?.titulo, formas: CATALOGO.map((c) => c.titulo), maos: L.maos.length, rastreamento: !!L.detector, visual: L.modo, modo: L.modoLab, foco: L.elementos?.foco()?.nome || null, janela: !!L.janela?.ligada() };
 }
 
 

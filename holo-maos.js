@@ -29,7 +29,7 @@ const NOMES = {
 };
 
 // ---------------- filtro One Euro ----------------
-class UmEuro {
+export class UmEuro {
   constructor(minCorte = 1.4, beta = 12, corteD = 1) {
     Object.assign(this, { minCorte, beta, corteD, x: null, dx: 0, t: 0 });
   }

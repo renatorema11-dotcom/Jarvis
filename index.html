@@ -2417,6 +2417,12 @@ async function acaoNoLab(acao, forma, alvo) {
   if (acao === 'exportar') return holo.exportarPeca((['stl', 'obj', 'glb'].find((f) => normalizarTexto(alvo).includes(f))) || 'stl');
   // oficina estilo Inventor: projetar pela voz, foto, celular (RA), apresentação, desenho, material, corte, montagem…
   const texto = normalizarTexto(alvo || forma);
+  // janela 3D: a projeção ganha profundidade com o movimento da cabeça (alvo "desligar" ou "calibrar")
+  if (acao === 'janela') {
+    if (/deslig|tira|fecha|sai|para|sem|off/.test(texto)) return holo.janela(false);
+    if (/calibr|centr|ajust/.test(texto)) return holo.calibrarJanela();
+    return holo.janela(true);
+  }
   if (acao === 'projetar') return holo.oficina('projetar', { texto: alvo || forma });
   if (acao === 'foto_peca') return holo.oficina('foto', { texto: alvo });
   if (acao === 'celular') return holo.oficina('celular');
