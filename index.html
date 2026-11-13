@@ -2419,8 +2419,8 @@ async function acaoNoLab(acao, forma, alvo) {
   const texto = normalizarTexto(alvo || forma);
   // janela 3D: a projeção ganha profundidade com o movimento da cabeça (alvo "desligar" ou "calibrar")
   if (acao === 'janela') {
-    if (/deslig|tira|fecha|sai|para|sem|off/.test(texto)) return holo.janela(false);
-    if (/calibr|centr|ajust/.test(texto)) return holo.calibrarJanela();
+    if (/(calibr|recalibr|centraliz|ajust)/.test(texto)) return holo.calibrarJanela();
+    if (/(deslig|desativ|apag|encerr|fech|tir[ae]|par(ar|e)|sair|off)/.test(texto)) return holo.janela(false);
     return holo.janela(true);
   }
   if (acao === 'projetar') return holo.oficina('projetar', { texto: alvo || forma });

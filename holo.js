@@ -755,7 +755,7 @@ function criarNuvem() {
         p.x += uGlitch * faixa * (semente - 0.5) * 0.9;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = max(1.2, uTamanho * uPixel * (0.7 + semente * 0.8) * (300.0 / -mv.z));
+        gl_PointSize = max(1.2, uTamanho * uPixel * (0.7 + semente * 0.8) * (124.26 * projectionMatrix[1][1] / -mv.z));
         float cintila = 0.78 + 0.22 * sin(uTempo * 2.6 + semente * 50.0);
         // faixas de interferência e uma linha de varredura subindo, como num projetor de verdade
         float bandas = 0.84 + 0.16 * sin(p.y * 26.0 - uTempo * 3.4);
