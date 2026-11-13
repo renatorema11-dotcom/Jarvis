@@ -32,11 +32,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
-import apps
-import dispositivos
-import tela
-import tv
-from navegador import Navegador
+# aberto pelo atalho (pythonw) não há janela: o log abre antes de tudo, para que até um erro
+# ao carregar os módulos abaixo fique registrado (antes ele sumia e o Jarvis PC morria calado)
+if sys.stdout is None:
+    sys.stdout = sys.stderr = open(Path(__file__).with_name("jarvis-pc.local.log"), "a", encoding="utf-8", buffering=1)
+print(f"== Jarvis PC iniciando em {time.strftime('%d/%m/%Y %H:%M:%S')} ==")
+
+try:
+    import apps
+    import dispositivos
+    import tela
+    import tv
+    from navegador import Navegador
+except Exception:
+    import traceback
+    print("!! O Jarvis PC não conseguiu carregar um dos módulos:")
+    traceback.print_exc()
+    raise
 
 # ---------------- CONFIG ----------------
 PORTA = 47801
@@ -336,8 +348,6 @@ def ouvir_palmas() -> None:
 
 
 if __name__ == "__main__":
-    if sys.stdout is None:   # aberto pelo atalho (pythonw): sem janela, então registra em arquivo
-        sys.stdout = sys.stderr = open(Path(__file__).with_name("jarvis-pc.local.log"), "a", encoding="utf-8", buffering=1)
     if not CHAVE:
         print(f"!! Não achei a chave em {ARQUIVO_CHAVE}. O Jarvis PC não vai aceitar comandos.")
     try:
